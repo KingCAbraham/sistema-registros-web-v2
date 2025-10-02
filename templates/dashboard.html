@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="card">
+    <h1 style="margin:0 0 10px 0;">Bienvenido 👋</h1>
+    <p>Este es el MVP del Sistema de Registros. Usa los accesos rápidos:</p>
+    <div class="grid" style="margin-top:14px;">
+      <div class="card">
+        <h3 style="margin-top:0;">Iniciar sesión</h3>
+        <p>Accede como <code>admin</code> para cargar base y catálogos.</p>
+        <a class="btn" href="/auth/login">Ir a Login</a>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Nuevo registro</h3>
+        <p>Busca un cliente de la <em>base_general</em> y registra la gestión.</p>
+        <a class="btn" href="/registros/nuevo">Crear registro</a>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Listado</h3>
+        <p>Consulta por semana o rango de fechas tus registros.</p>
+        <a class="btn secondary" href="/registros">Ver registros</a>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Administración</h3>
+        <p>Cargar <strong>.xlsx</strong> de base_general y gestionar catálogos.</p>
+        <a class="btn secondary" href="/admin">Panel Admin</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

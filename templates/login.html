@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card" style="max-width:480px;margin:24px auto;">
+  <h2 style="margin-top:0;">Iniciar sesión</h2>
+  <form method="post" action="{{ url_for('auth.login') }}">
+    {{ form.hidden_tag() }}
+
+    <div style="margin-bottom:12px;">
+      <label>Usuario</label><br>
+      {{ form.username(class="input", placeholder="admin") }}
+      {% for e in form.username.errors %}
+        <div style="color:#dc2626">{{ e }}</div>
+      {% endfor %}
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label>Contraseña</label><br>
+      {{ form.password(class="input", placeholder="•••••••") }}
+      {% for e in form.password.errors %}
+        <div style="color:#dc2626">{{ e }}</div>
+      {% endfor %}
+    </div>
+
+    {{ form.submit(class="btn") }}
+  </form>
+</div>
+{% endblock %}
