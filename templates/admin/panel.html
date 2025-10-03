@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h2 style="margin:0 0 12px;">Carga de base_general (.xlsx)</h2>
+    <p style="color:#64748b;margin-top:0;">
+      Sube la base diaria. El sistema validará columnas y <strong>solo insertará clientes nuevos</strong>.
+    </p>
+    <form action="" method="post" enctype="multipart/form-data">
+      <input type="file" name="archivo" accept=".xlsx"
+             style="display:block;margin:10px 0;">
+      <button class="btn" type="submit">Cargar</button>
+      <a class="btn secondary" href="{{ url_for('home') }}" style="margin-left:8px;">Volver</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

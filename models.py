@@ -1,66 +1,69 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Date, ForeignKey, Numeric
-from sqlalchemy.sql import func
-from sqlalchemy.dialects.mysql import BIGINT
-from sqlalchemy.orm import relationship
+from datetime import datetime
+from sqlalchemy import Integer, String, Date, DateTime, Text, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db import Base
 
+# --- Usuarios ---
 class Usuario(Base):
     __tablename__ = "usuarios"
-    id = Column(Integer, primary_key=True)
-    username = Column(String(100), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    role = Column(String(20), nullable=False, default="agente")  # admin, gerente, supervisor, agente
-    activo = Column(Boolean, default=True)
-    creado_en = Column(DateTime, server_default=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="agente")
+    activo: Mapped[int] = mapped_column(Integer, default=1)
+    creado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-class BaseGeneral(Base):
-    __tablename__ = "base_general"
-    id = Column(BIGINT(unsigned=True), primary_key=True, autoincrement=True)
-    cliente_unico = Column(String(100), index=True, nullable=False)
-    nombre_cte = Column(String(255))
-    gerencia = Column(String(255))
-    producto = Column(String(255))
-    fidiapago = Column(String(255))
-    gestion_desc = Column(Text)
-    cargado_en = Column(DateTime, server_default=func.now())
-    # … (puedes ampliar con todas las columnas que nos pasaste)
-
+# --- Catálogos ---
 class TipoConvenio(Base):
     __tablename__ = "tipo_convenio"
-    id = Column(Integer, primary_key=True)
-    nombre = Column(String(100), unique=True, nullable=False)
-    activo = Column(Boolean, default=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    activo: Mapped[int] = mapped_column(Integer, default=1)
 
 class BocaCobranza(Base):
     __tablename__ = "bocas_cobranza"
-    id = Column(Integer, primary_key=True)
-    nombre = Column(String(100), unique=True, nullable=False)
-    activo = Column(Boolean, default=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    activo: Mapped[int] = mapped_column(Integer, default=1)
 
+# --- Base General (diaria) ---
+class BaseGeneral(Base):
+    __tablename__ = "base_general"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cliente_unico: Mapped[str] = mapped_column(String(100), index=True, nullable=False, unique=True)
+    nombre_cte: Mapped[str] = mapped_column(String(255))
+    gerencia: Mapped[str] = mapped_column(String(255))
+    producto: Mapped[str] = mapped_column(String(255))
+    fidiapago: Mapped[str] = mapped_column(String(255))
+    gestion_desc: Mapped[str] = mapped_column(Text)
+
+# --- Registros (del agente) ---
 class Registro(Base):
     __tablename__ = "registros"
-    id = Column(BIGINT(unsigned=True), primary_key=True, autoincrement=True)
-    cliente_unico = Column(String(100), index=True, nullable=False)
-    nombre_cte_snap = Column(String(255))
-    gerencia_snap = Column(String(255))
-    producto_snap = Column(String(255))
-    fidiapago_snap = Column(String(255))
-    gestion_desc_snap = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cliente_unico: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
 
-    tipo_convenio_id = Column(Integer, ForeignKey("tipo_convenio.id"), nullable=False)
-    boca_cobranza_id = Column(Integer, ForeignKey("bocas_cobranza.id"), nullable=False)
+    # snapshot
+    nombre_cte_snap: Mapped[str] = mapped_column(String(255))
+    gerencia_snap: Mapped[str] = mapped_column(String(255))
+    producto_snap: Mapped[str] = mapped_column(String(255))
+    fidiapago_snap: Mapped[str] = mapped_column(String(255))
+    gestion_desc_snap: Mapped[str] = mapped_column(Text)
 
-    fecha_promesa = Column(Date, nullable=False)
-    telefono = Column(String(30))
-    semana = Column(Integer)  # 1-53
-    notas = Column(Text)
+    tipo_convenio_id: Mapped[int] = mapped_column(Integer, ForeignKey("tipo_convenio.id"), nullable=False)
+    boca_cobranza_id: Mapped[int] = mapped_column(Integer, ForeignKey("bocas_cobranza.id"), nullable=False)
 
-    archivo_convenio = Column(String(255))
-    archivo_pago = Column(String(255))
-    archivo_gestion = Column(String(255))
+    fecha_promesa: Mapped[datetime] = mapped_column(Date)
+    telefono: Mapped[str] = mapped_column(String(30))
+    semana: Mapped[int] = mapped_column(Integer)
+    notas: Mapped[str] = mapped_column(Text)
 
-    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    creado_en = Column(DateTime, server_default=func.now())
+    archivo_convenio: Mapped[str] = mapped_column(String(255))
+    archivo_pago: Mapped[str] = mapped_column(String(255))
+    archivo_gestion: Mapped[str] = mapped_column(String(255))
 
-    tipo_convenio = relationship("TipoConvenio")
-    boca_cobranza = relationship("BocaCobranza")
+    creado_por: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    tipo_convenio: Mapped["TipoConvenio"] = relationship("TipoConvenio")
+    boca_cobranza: Mapped["BocaCobranza"] = relationship("BocaCobranza")

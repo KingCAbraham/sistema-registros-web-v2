@@ -1,0 +1,140 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h2>Nuevo registro</h2>
+
+  <form method="post" action="{{ url_for('registros.crear') }}">
+    <div class="row">
+      <div>
+        <label>CLIENTE_UNICO (busca y selecciona)</label>
+        <!-- input con datalist -->
+        <input id="cliente_unico" name="cliente_unico" list="dl_cu" autocomplete="off" required>
+        <datalist id="dl_cu"></datalist>
+      </div>
+      <div>
+        <label>Nombre</label>
+        <input id="nombre_cte" type="text" readonly>
+      </div>
+      <div>
+        <label>Gerencia</label>
+        <input id="gerencia" type="text" readonly>
+      </div>
+      <div>
+        <label>Producto</label>
+        <input id="producto" type="text" readonly>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>FIDIAPAGO</label>
+        <input id="fidiapago" type="text" readonly>
+      </div>
+    </div>
+
+    <div>
+      <label>GESTION_DESC</label>
+      <textarea id="gestion_desc" rows="5" readonly></textarea>
+    </div>
+
+    <hr>
+
+    <div class="row">
+      <div>
+        <label>Tipo de convenio</label>
+        <select name="tipo_convenio_id" required>
+          {% for t in tipos %}
+          <option value="{{ t.id }}">{{ t.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Boca de cobranza</label>
+        <select name="boca_cobranza_id" required>
+          {% for b in bocas %}
+          <option value="{{ b.id }}">{{ b.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Fecha promesa</label>
+        <input type="date" name="fecha_promesa" value="{{ now|default('', true) }}">
+      </div>
+      <div>
+        <label>Teléfono</label>
+        <input type="text" name="telefono">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Semana (1-52)</label>
+        <input type="number" name="semana" min="1" max="52" value="">
+      </div>
+    </div>
+
+    <div>
+      <label>Notas</label>
+      <textarea name="notas" rows="4"></textarea>
+    </div>
+
+    <div style="margin-top:14px">
+      <button type="submit">Guardar</button>
+      <a class="btn secondary" href="{{ url_for('registros.listado') }}">Cancelar</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  const $cu   = document.getElementById('cliente_unico');
+  const $dl   = document.getElementById('dl_cu');
+  const $nom  = document.getElementById('nombre_cte');
+  const $ger  = document.getElementById('gerencia');
+  const $prod = document.getElementById('producto');
+  const $fidi = document.getElementById('fidiapago');
+  const $gest = document.getElementById('gestion_desc');
+
+  // 1) Autocomplete con datalist
+  let lastQ = "";
+  $cu.addEventListener('input', async () => {
+    const q = $cu.value.trim();
+    if (q.length < 2 || q === lastQ) return;
+    lastQ = q;
+    try {
+      const r = await fetch(`/registros/api/search_cliente?term=${encodeURIComponent(q)}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      $dl.innerHTML = '';
+      data.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.cliente_unico;
+        opt.label = item.nombre_cte || '';
+        $dl.appendChild(opt);
+      });
+    } catch (e) { /* noop */ }
+  });
+
+  // 2) Autollenar al elegir un valor del datalist (o al perder foco)
+  async function fillCliente() {
+    const cu = $cu.value.trim();
+    if (!cu) return;
+    try {
+      const r = await fetch(`/registros/api/datos_cliente?cu=${encodeURIComponent(cu)}`);
+      const j = await r.json();
+      if (!j.ok) {
+        $nom.value = $ger.value = $prod.value = $fidi.value = '';
+        $gest.value = '';
+        return;
+      }
+      $nom.value  = j.data.nombre_cte || '';
+      $ger.value  = j.data.gerencia || '';
+      $prod.value = j.data.producto || '';
+      $fidi.value = j.data.fidiapago || '';
+      $gest.value = j.data.gestion_desc || '';
+    } catch (e) { /* noop */ }
+  }
+
+  $cu.addEventListener('change', fillCliente);
+  $cu.addEventListener('blur', fillCliente);
+</script>
+{% endblock %}

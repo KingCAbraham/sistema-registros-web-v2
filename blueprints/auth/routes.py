@@ -1,63 +1,38 @@
-# blueprints/auth/routes.py
 from flask import render_template, request, redirect, url_for, flash, session
 from werkzeug.security import check_password_hash
-import pymysql
-import os
+from db import SessionLocal
+from models import Usuario
+from . import auth_bp  # IMPORTA el blueprint ya creado en __init__.py
 
-from . import auth_bp
-from .forms import LoginForm
-
-from dotenv import load_dotenv
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = int(os.getenv("DB_PORT", "4000"))
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME", "sistema_registros")
-DB_SSL_CA = os.getenv("DB_SSL_CA")
-
-def get_conn():
-    return pymysql.connect(
-        host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD,
-        database=DB_NAME, ssl={"ca": DB_SSL_CA}
-    )
-
-@auth_bp.route("/login", methods=["GET", "POST"])
+@auth_bp.get("/login")
 def login():
-    form = LoginForm()
-    if form.validate_on_submit():  # sólo True en POST con CSRF OK y campos válidos
-        username = form.username.data.strip()
-        password = form.password.data
+    return render_template("login.html")
 
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, password_hash, role, activo FROM usuarios WHERE username=%s", (username,))
-            row = cur.fetchone()
+@auth_bp.post("/login")
+def login_post():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
 
-        if not row:
-            flash("Usuario o contraseña inválidos.", "danger")
-            return render_template("login.html", form=form)
+    if not username or not password:
+        flash("Usuario y contraseña son obligatorios", "warning")
+        return redirect(url_for("auth.login"))
 
-        user_id, password_hash, role, activo = row
-        if not activo:
-            flash("Usuario inactivo.", "warning")
-            return render_template("login.html", form=form)
+    with SessionLocal() as db:
+        user = db.query(Usuario).filter(Usuario.username == username, Usuario.activo == 1).first()
 
-        if not check_password_hash(password_hash, password):
-            flash("Usuario o contraseña inválidos.", "danger")
-            return render_template("login.html", form=form)
+    if not user or not check_password_hash(user.password_hash, password):
+        flash("Credenciales inválidas", "danger")
+        return redirect(url_for("auth.login"))
 
-        session["user_id"] = user_id
-        session["username"] = username
-        session["role"] = role
-        flash(f"Bienvenido, {username}", "success")
-        return redirect(url_for("home"))
+    session["user_id"] = user.id
+    session["username"] = user.username
+    session["role"] = user.role
 
-    # GET o POST inválido → renderiza con errores
-    return render_template("login.html", form=form)
+    flash(f"Bienvenido, {user.username}", "success")
+    return redirect(url_for("home"))
 
-@auth_bp.route("/logout")
+@auth_bp.get("/logout")
 def logout():
     session.clear()
-    flash("Sesión cerrada.", "success")
-    return redirect(url_for("home"))
+    flash("Sesión cerrada", "success")
+    return redirect(url_for("auth.login"))

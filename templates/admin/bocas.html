@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Bocas de cobranza</h2>
+<div class="card">
+  <form method="post" style="display:flex; gap:8px;">
+    <input name="nombre" placeholder="Nueva boca" class="form-control" required>
+    <button class="btn">Agregar</button>
+  </form>
+</div>
+<div class="card" style="margin-top:12px;">
+  <ul>
+    {% for b in bocas %}
+      <li>{{ b.nombre }} {% if not b.activo %}(inactiva){% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

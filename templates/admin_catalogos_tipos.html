@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h3>Catálogo: Tipo de Convenio</h3>
+  <form method="post" style="margin-bottom:12px;">
+    <div class="row">
+      <div><label>Nombre</label><input name="nombre" required /></div>
+      <div><label>Activo</label><input type="checkbox" name="activo" checked /></div>
+    </div>
+    <div style="margin-top:10px;"><button type="submit">Guardar</button></div>
+  </form>
+
+  <table style="width:100%; border-collapse:collapse;">
+    <tr><th style="text-align:left;">Nombre</th><th>Activo</th></tr>
+    {% for t in tipos %}
+    <tr>
+      <td>{{ t.nombre }}</td>
+      <td style="text-align:center;">{{ 'Sí' if t.activo else 'No' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

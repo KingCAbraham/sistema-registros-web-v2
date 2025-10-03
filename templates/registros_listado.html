@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h3>Mis Registros (últimos 100)</h3>
+  <table style="width:100%; border-collapse:collapse;">
+    <tr>
+      <th>ID</th><th>Cliente</th><th>Tipo</th><th>Boca</th><th>Fecha Promesa</th><th>Creado</th>
+    </tr>
+    {% for r in registros %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td>{{ r.cliente_unico }} — {{ r.nombre_cte_snap }}</td>
+      <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '' }}</td>
+      <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '' }}</td>
+      <td>{{ r.fecha_promesa }}</td>
+      <td>{{ r.creado_en }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

@@ -1,36 +1,39 @@
-import os
-from flask import Flask, render_template
+# app.py
+from flask import Flask, render_template, session, redirect, url_for, flash  # <-- faltaban estos
 from config import Config
-from db import engine, Base
-
-# importa los blueprints del paquete (que ya auto-importa sus routes)
 from blueprints.auth import auth_bp
 from blueprints.registros import registros_bp
 from blueprints.admin import admin_bp
 
-def create_app():
-    app = Flask(__name__)
-    app.config.from_object(Config)
+app = Flask(__name__)
+app.config.from_object(Config)
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(registros_bp)
-    app.register_blueprint(admin_bp)
+# Registra blueprints: ya traen su propio url_prefix en cada __init__.py
+app.register_blueprint(auth_bp)        # /auth
+app.register_blueprint(registros_bp)   # /registros
+app.register_blueprint(admin_bp)       # /admin
 
-    @app.route("/")
-    def home():
-        return render_template("dashboard.html")
+# Para que layout.html sepa quién está logueado
+@app.context_processor
+def inject_current_user():
+    return {
+        "current_username": session.get("username"),
+        "current_role": session.get("role"),
+    }
 
-    # asegurar carpeta uploads
-    upload_dir = app.config.get("UPLOAD_FOLDER")
-    if not upload_dir:
-        upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
-        app.config["UPLOAD_FOLDER"] = upload_dir
-    os.makedirs(upload_dir, exist_ok=True)
+# Raíz: sin sesión -> login; con sesión -> dashboard
+@app.route("/")
+def home():
+    if not session.get("user_id"):
+        return redirect(url_for("auth.login"))
+    return render_template("dashboard.html")
 
-    return app
-
-app = create_app()
+# 413 amigable (archivo grande)
+@app.errorhandler(413)
+def too_large(e):
+    flash("El archivo es demasiado grande. Sube un .xlsx más pequeño o pide aumentar el límite.", "danger")
+    return redirect(url_for("admin.base_general"))
 
 if __name__ == "__main__":
-    Base.metadata.create_all(bind=engine)
+    # Asegúrate de tener SECRET_KEY en .env / Config para que funcione la sesión
     app.run(host="0.0.0.0", port=5000, debug=True)

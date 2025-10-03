@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h3>Usuarios</h3>
+  <form method="post" style="margin-bottom:12px;">
+    <div class="row">
+      <div><label>Usuario</label><input name="username" required /></div>
+      <div>
+        <label>Rol</label>
+        <select name="role">
+          <option value="agente">agente</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div><label>Contraseña</label><input type="password" name="password" required /></div>
+      <div><label>Activo</label><input type="checkbox" name="activo" checked /></div>
+    </div>
+    <div style="margin-top:10px;"><button type="submit">Guardar</button></div>
+  </form>
+
+  <table style="width:100%; border-collapse:collapse;">
+    <tr><th>Usuario</th><th>Rol</th><th>Activo</th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.username }}</td>
+      <td>{{ u.role }}</td>
+      <td style="text-align:center;">{{ 'Sí' if u.activo else 'No' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

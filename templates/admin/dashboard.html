@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Panel de administración</h2>
+<div class="card">
+  <p>Desde aquí puedes gestionar usuarios, catálogos y la base general.</p>
+  <ul>
+    <li><a href="{{ url_for('admin.usuarios') }}">Usuarios</a></li>
+    <li><a href="{{ url_for('admin.catalogo_bocas') }}">Bocas de cobranza</a></li>
+    <li><a href="{{ url_for('admin.catalogo_tipos') }}">Tipos de convenio</a></li>
+    <li><a href="{{ url_for('admin.base_general') }}">Base general</a></li>
+  </ul>
+</div>
+{% endblock %}

@@ -1,27 +1,28 @@
 import os
 from dotenv import load_dotenv
-
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 load_dotenv()
 
+def _build_uri():
+    host = os.getenv("DB_HOST")
+    port = os.getenv("DB_PORT", "4000")
+    user = os.getenv("DB_USER")
+    pwd  = os.getenv("DB_PASSWORD")
+    db   = os.getenv("DB_NAME", "sistema_registros")
+    ca   = os.getenv("DB_SSL_CA", "")
+
+    if not (host and user and pwd):
+        return None
+
+    ca_param = ""
+    if ca:
+        # escapar backslashes en windows para URL
+        ca_norm = ca.replace("\\", "\\\\")
+        ca_param = f"&ssl_ca={ca_norm}&ssl_verify_cert=true&ssl_verify_identity=true"
+
+    return f"mysql+pymysql://{user}:{pwd}@{host}:{port}/{db}?charset=utf8mb4{ca_param}"
+
 class Config:
-    FLASK_ENV = os.getenv("FLASK_ENV", "development")
-    SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
-
-    # --- TiDB ---
-    DB_HOST = os.getenv("DB_HOST")
-    DB_PORT = int(os.getenv("DB_PORT", "4000"))
-    DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
-    DB_NAME = os.getenv("DB_NAME")
-    DB_SSL_CA = os.getenv("DB_SSL_CA")
-    SQLALCHEMY_DATABASE_URI = (
-        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        f"?ssl_ca={DB_SSL_CA}&ssl_verify_cert=true&ssl_verify_identity=true"
-        if all([DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_SSL_CA])
-        else None
-    )
-
-    # --- Archivos / uploads ---
-    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", os.path.join(BASE_DIR, "uploads"))
-    MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))  # 16MB
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
+    SQLALCHEMY_DATABASE_URI = _build_uri()
+    MAX_CONTENT_LENGTH = 64 * 1024 * 1024  # 20MB
+    UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")

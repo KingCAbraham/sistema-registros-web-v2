@@ -1,29 +1,26 @@
 {% extends "layout.html" %}
+
 {% block content %}
-  <div class="card">
-    <h1 style="margin:0 0 10px 0;">Bienvenido 👋</h1>
-    <p>Este es el MVP del Sistema de Registros. Usa los accesos rápidos:</p>
-    <div class="grid" style="margin-top:14px;">
-      <div class="card">
-        <h3 style="margin-top:0;">Iniciar sesión</h3>
-        <p>Accede como <code>admin</code> para cargar base y catálogos.</p>
-        <a class="btn" href="/auth/login">Ir a Login</a>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0;">Nuevo registro</h3>
-        <p>Busca un cliente de la <em>base_general</em> y registra la gestión.</p>
-        <a class="btn" href="/registros/nuevo">Crear registro</a>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0;">Listado</h3>
-        <p>Consulta por semana o rango de fechas tus registros.</p>
-        <a class="btn secondary" href="/registros">Ver registros</a>
-      </div>
-      <div class="card">
-        <h3 style="margin-top:0;">Administración</h3>
-        <p>Cargar <strong>.xlsx</strong> de base_general y gestionar catálogos.</p>
-        <a class="btn secondary" href="/admin">Panel Admin</a>
-      </div>
-    </div>
-  </div>
+<div class="card">
+  <h2 style="margin-top:0;">Dashboard</h2>
+
+  {% if current_role == 'admin' %}
+    <p>Accesos rápidos del administrador:</p>
+    <p style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn" href="{{ url_for('admin.index') }}">Panel admin</a>
+      <a class="btn" href="{{ url_for('admin.base_general') }}">Base General</a>
+      <a class="btn" href="{{ url_for('admin.catalogo_tipos') }}">Tipos</a>
+      <a class="btn" href="{{ url_for('admin.catalogo_bocas') }}">Bocas</a>
+      <a class="btn" href="{{ url_for('admin.usuarios_list') }}">Usuarios</a>
+    </p>
+  {% elif current_role == 'agente' %}
+    <p>Accesos rápidos del agente:</p>
+    <p style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn" href="{{ url_for('registros.nuevo') }}">Nuevo registro</a>
+      <a class="btn" href="{{ url_for('registros.listado') }}">Mis registros</a>
+    </p>
+  {% else %}
+    <p>Inicia sesión para ver tus opciones.</p>
+  {% endif %}
+</div>
 {% endblock %}
