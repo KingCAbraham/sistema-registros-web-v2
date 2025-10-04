@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h2>Resumen {% if semana %}Semana {{ semana }}{% else %}(todas){% endif %}</h2>
+
+  <form method="get" action="{{ url_for('registros.resumen') }}" style="margin-bottom:12px">
+    <label>Semana:</label>
+    <input type="number" name="semana" min="1" max="52" value="{{ semana or '' }}">
+    <button type="submit">Filtrar</button>
+  </form>
+
+  <p>Total de registros: <strong>{{ total }}</strong></p>
+
+  <div class="row">
+    <div>
+      <h4>Por tipo</h4>
+      <ul>
+        {% for k,v in por_tipo.items() %}
+          <li>{{ k }}: {{ v }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <h4>Por boca</h4>
+      <ul>
+        {% for k,v in por_boca.items() %}
+          <li>{{ k }}: {{ v }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <hr>
+  <h4>Últimos registros</h4>
+  <table style="width:100%;border-collapse:collapse">
+    <tr>
+      <th>ID</th><th>Cliente</th><th>Tipo</th><th>Boca</th><th>Fecha promesa</th><th>Semana</th><th>Creado</th>
+    </tr>
+    {% for r in registros[:50] %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td>{{ r.cliente_unico }} — {{ r.nombre_cte_snap }}</td>
+      <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '' }}</td>
+      <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '' }}</td>
+      <td>{{ r.fecha_promesa }}</td>
+      <td>{{ r.semana }}</td>
+      <td>{{ r.creado_en }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

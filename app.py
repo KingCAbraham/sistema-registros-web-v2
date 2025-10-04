@@ -1,39 +1,62 @@
 # app.py
-from flask import Flask, render_template, session, redirect, url_for, flash  # <-- faltaban estos
+import os
+from flask import Flask, render_template, session, redirect, url_for, flash
 from config import Config
+
+# Blueprints (cada uno define su propio url_prefix en su __init__.py)
 from blueprints.auth import auth_bp
 from blueprints.registros import registros_bp
 from blueprints.admin import admin_bp
 
-app = Flask(__name__)
-app.config.from_object(Config)
 
-# Registra blueprints: ya traen su propio url_prefix en cada __init__.py
-app.register_blueprint(auth_bp)        # /auth
-app.register_blueprint(registros_bp)   # /registros
-app.register_blueprint(admin_bp)       # /admin
+def create_app() -> Flask:
+    app = Flask(__name__)
+    app.config.from_object(Config)
 
-# Para que layout.html sepa quién está logueado
-@app.context_processor
-def inject_current_user():
-    return {
-        "current_username": session.get("username"),
-        "current_role": session.get("role"),
-    }
+    # Asegura la carpeta de uploads (coincide con Config.UPLOAD_FOLDER)
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-# Raíz: sin sesión -> login; con sesión -> dashboard
-@app.route("/")
-def home():
-    if not session.get("user_id"):
-        return redirect(url_for("auth.login"))
-    return render_template("dashboard.html")
+    # ---- Blueprints ----
+    app.register_blueprint(auth_bp)       # /auth
+    app.register_blueprint(registros_bp)  # /registros
+    app.register_blueprint(admin_bp)      # /admin
 
-# 413 amigable (archivo grande)
-@app.errorhandler(413)
-def too_large(e):
-    flash("El archivo es demasiado grande. Sube un .xlsx más pequeño o pide aumentar el límite.", "danger")
-    return redirect(url_for("admin.base_general"))
+    # ---- Contexto para templates (layout.html) ----
+    @app.context_processor
+    def inject_current_user():
+        return {
+            "current_username": session.get("username"),
+            "current_role": session.get("role"),
+        }
+
+    # ---- Rutas raíz / utilidades ----
+    @app.route("/")
+    def home():
+        """Si no hay sesión => login. Si hay sesión => dashboard."""
+        if not session.get("user_id"):
+            return redirect(url_for("auth.login"))
+        return render_template("dashboard.html")
+
+    # Opcional: pequeña ruta de salud para pruebas de despliegue
+    @app.route("/healthz")
+    def healthz():
+        return {"status": "ok"}
+
+    # ---- Manejo de errores ----
+    @app.errorhandler(413)
+    def too_large(e):
+        mb = app.config.get("MAX_CONTENT_LENGTH", 0) // (1024 * 1024)
+        if mb:
+            flash(f"El archivo excede el límite de {mb} MB.", "danger")
+        else:
+            flash("El archivo es demasiado grande.", "danger")
+        return redirect(url_for("admin.base_general"))
+
+    return app
+
+
+app = create_app()
 
 if __name__ == "__main__":
-    # Asegúrate de tener SECRET_KEY en .env / Config para que funcione la sesión
+    # Asegúrate de tener SECRET_KEY en tu .env o en Config para manejar sesión
     app.run(host="0.0.0.0", port=5000, debug=True)

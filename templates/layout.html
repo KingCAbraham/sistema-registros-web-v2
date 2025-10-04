@@ -29,6 +29,7 @@
         {% if current_role == 'agente' %}
           <a href="{{ url_for('registros.nuevo') }}">Nuevo registro</a>
           <a href="{{ url_for('registros.listado') }}">Mis registros</a>
+          <a href="{{ url_for('registros.resumen') }}">Mi resumen</a>
         {% elif current_role == 'admin' %}
           <a href="{{ url_for('admin.index') }}">Admin</a>
           <a href="{{ url_for('admin.base_general') }}">Base General</a>

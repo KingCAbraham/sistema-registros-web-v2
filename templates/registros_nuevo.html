@@ -3,11 +3,11 @@
 <div class="card">
   <h2>Nuevo registro</h2>
 
-  <form method="post" action="{{ url_for('registros.crear') }}">
+  <!-- IMPORTANTÍSIMO: enctype para poder enviar archivos -->
+  <form method="post" action="{{ url_for('registros.crear') }}" enctype="multipart/form-data">
     <div class="row">
       <div>
         <label>CLIENTE_UNICO (busca y selecciona)</label>
-        <!-- input con datalist -->
         <input id="cliente_unico" name="cliente_unico" list="dl_cu" autocomplete="off" required>
         <datalist id="dl_cu"></datalist>
       </div>
@@ -58,7 +58,7 @@
       </div>
       <div>
         <label>Fecha promesa</label>
-        <input type="date" name="fecha_promesa" value="{{ now|default('', true) }}">
+        <input type="date" name="fecha_promesa">
       </div>
       <div>
         <label>Teléfono</label>
@@ -69,7 +69,7 @@
     <div class="row">
       <div>
         <label>Semana (1-52)</label>
-        <input type="number" name="semana" min="1" max="52" value="">
+        <input type="number" name="semana" min="1" max="52">
       </div>
     </div>
 
@@ -77,6 +77,24 @@
       <label>Notas</label>
       <textarea name="notas" rows="4"></textarea>
     </div>
+
+    <!-- ===== Evidencias (PDF/JPG/PNG) ===== -->
+    <hr>
+    <div class="row" style="gap:12px">
+      <div>
+        <label>Convenio (PDF/imagen)</label>
+        <input type="file" name="archivo_convenio" accept=".pdf,.png,.jpg,.jpeg">
+      </div>
+      <div>
+        <label>Ticket/Pago (PDF/imagen)</label>
+        <input type="file" name="archivo_pago" accept=".pdf,.png,.jpg,.jpeg">
+      </div>
+      <div>
+        <label>Evidencia de gestión (PDF/imagen)</label>
+        <input type="file" name="archivo_gestion" accept=".pdf,.png,.jpg,.jpeg">
+      </div>
+    </div>
+    <!-- /Evidencias -->
 
     <div style="margin-top:14px">
       <button type="submit">Guardar</button>

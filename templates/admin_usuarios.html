@@ -1,31 +1,45 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="card">
-  <h3>Usuarios</h3>
-  <form method="post" style="margin-bottom:12px;">
+  <h2>Usuarios</h2>
+
+  <form method="post" action="{{ url_for('admin.usuarios_create') }}" style="margin-bottom:16px">
     <div class="row">
-      <div><label>Usuario</label><input name="username" required /></div>
+      <div>
+        <label>Usuario</label>
+        <input name="username" required>
+      </div>
+      <div>
+        <label>Contraseña</label>
+        <input name="password" type="password" required>
+      </div>
       <div>
         <label>Rol</label>
         <select name="role">
           <option value="agente">agente</option>
+          <option value="supervisor">supervisor</option>
+          <option value="gerente">gerente</option>
           <option value="admin">admin</option>
         </select>
       </div>
-      <div><label>Contraseña</label><input type="password" name="password" required /></div>
-      <div><label>Activo</label><input type="checkbox" name="activo" checked /></div>
+      <div>
+        <label>Activo</label>
+        <input type="checkbox" name="activo" checked>
+      </div>
     </div>
-    <div style="margin-top:10px;"><button type="submit">Guardar</button></div>
+    <button type="submit">Crear</button>
   </form>
 
-  <table style="width:100%; border-collapse:collapse;">
-    <tr><th>Usuario</th><th>Rol</th><th>Activo</th></tr>
-    {% for u in users %}
-    <tr>
-      <td>{{ u.username }}</td>
-      <td>{{ u.role }}</td>
-      <td style="text-align:center;">{{ 'Sí' if u.activo else 'No' }}</td>
-    </tr>
+  <table style="width:100%;border-collapse:collapse">
+    <tr><th>ID</th><th>Usuario</th><th>Rol</th><th>Activo</th><th>Creado</th></tr>
+    {% for u in usuarios %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.role }}</td>
+        <td>{{ 'Sí' if u.activo else 'No' }}</td>
+        <td>{{ u.creado_en }}</td>
+      </tr>
     {% endfor %}
   </table>
 </div>

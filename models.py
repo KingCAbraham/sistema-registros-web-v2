@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import Integer, String, Date, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db import Base
@@ -26,44 +26,51 @@ class BocaCobranza(Base):
     nombre: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     activo: Mapped[int] = mapped_column(Integer, default=1)
 
-# --- Base General (diaria) ---
+# --- Base General ---
 class BaseGeneral(Base):
     __tablename__ = "base_general"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     cliente_unico: Mapped[str] = mapped_column(String(100), index=True, nullable=False, unique=True)
-    nombre_cte: Mapped[str] = mapped_column(String(255))
-    gerencia: Mapped[str] = mapped_column(String(255))
-    producto: Mapped[str] = mapped_column(String(255))
-    fidiapago: Mapped[str] = mapped_column(String(255))
-    gestion_desc: Mapped[str] = mapped_column(Text)
+    nombre_cte: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    gerencia: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    producto: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fidiapago: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    gestion_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-# --- Registros (del agente) ---
+# --- Registros ---
 class Registro(Base):
     __tablename__ = "registros"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     cliente_unico: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
 
-    # snapshot
-    nombre_cte_snap: Mapped[str] = mapped_column(String(255))
-    gerencia_snap: Mapped[str] = mapped_column(String(255))
-    producto_snap: Mapped[str] = mapped_column(String(255))
-    fidiapago_snap: Mapped[str] = mapped_column(String(255))
-    gestion_desc_snap: Mapped[str] = mapped_column(Text)
+    # snapshot (opcionales)
+    nombre_cte_snap: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    gerencia_snap: Mapped[str | None]   = mapped_column(String(255), nullable=True)
+    producto_snap: Mapped[str | None]   = mapped_column(String(255), nullable=True)
+    fidiapago_snap: Mapped[str | None]  = mapped_column(String(255), nullable=True)
+    gestion_desc_snap: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tipo_convenio_id: Mapped[int] = mapped_column(Integer, ForeignKey("tipo_convenio.id"), nullable=False)
     boca_cobranza_id: Mapped[int] = mapped_column(Integer, ForeignKey("bocas_cobranza.id"), nullable=False)
 
-    fecha_promesa: Mapped[datetime] = mapped_column(Date)
-    telefono: Mapped[str] = mapped_column(String(30))
-    semana: Mapped[int] = mapped_column(Integer)
-    notas: Mapped[str] = mapped_column(Text)
+    # OJO: es date, no datetime
+    fecha_promesa: Mapped[date] = mapped_column(Date, nullable=False)
 
-    archivo_convenio: Mapped[str] = mapped_column(String(255))
-    archivo_pago: Mapped[str] = mapped_column(String(255))
-    archivo_gestion: Mapped[str] = mapped_column(String(255))
+    telefono: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    semana:   Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notas:    Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # evidencias (opcionales)
+    archivo_convenio: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    archivo_pago:     Mapped[str | None] = mapped_column(String(255), nullable=True)
+    archivo_gestion:  Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     creado_por: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    creado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    creado_en:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    tipo_convenio: Mapped["TipoConvenio"] = relationship("TipoConvenio")
-    boca_cobranza: Mapped["BocaCobranza"] = relationship("BocaCobranza")
+    # relaciones con eager loading por defecto
+    tipo_convenio: Mapped["TipoConvenio"] = relationship("TipoConvenio", lazy="selectin")
+    boca_cobranza: Mapped["BocaCobranza"] = relationship("BocaCobranza", lazy="selectin")
+
+    # opcional: saber quién creó
+    creador: Mapped["Usuario"] = relationship("Usuario", lazy="selectin")

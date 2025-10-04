@@ -1,1 +1,113 @@
-/* vacío por ahora; puedes extender */
+/* ====== Sistema de Registros – Tema compacto ====== */
+:root{
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e5e7eb;
+  --brand: #2563eb;
+  --brand-ink: #ffffff;
+  --ok: #16a34a;
+  --warn: #f59e0b;
+  --danger: #dc2626;
+  --radius: 14px;
+  --shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root{
+    --bg:#0b1220; --card:#0f172a; --ink:#e5e7eb; --muted:#94a3b8;
+    --line:#1e293b; --brand:#3b82f6; --brand-ink:#0b1220;
+    --ok:#22c55e; --warn:#fbbf24; --danger:#ef4444; --shadow: 0 1px 8px rgba(0,0,0,.5);
+  }
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+}
+
+/* Header */
+header{
+  background:#0f172a; color:#fff; padding:12px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:10; box-shadow:0 1px 0 rgba(255,255,255,.06);
+}
+header .brand{font-weight:700; letter-spacing:.3px}
+header nav a{
+  color:#cbd5e1; margin-left:14px; text-decoration:none; padding:6px 8px; border-radius:8px;
+}
+header nav a:hover{ background:rgba(255,255,255,.08); color:#fff }
+
+/* Layout */
+.container{ max-width:1100px; margin:24px auto; padding:0 16px }
+.card{ background:var(--card); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+h1,h2,h3{ margin:0 0 10px }
+h2{ font-size:18px } h3{ font-size:16px; color:var(--muted) }
+
+/* Grid helper */
+.row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:14px }
+
+/* Inputs & selects */
+input, select, textarea{
+  width:100%; padding:9px 10px; border-radius:10px; border:1px solid var(--line);
+  background:transparent; color:inherit; outline: none;
+}
+textarea{ resize: vertical }
+label{ display:block; font-size:12px; color:var(--muted); margin:6px 0 6px }
+input:focus, select:focus, textarea:focus{
+  border-color:var(--brand); box-shadow:0 0 0 3px rgba(37,99,235,.15)
+}
+
+/* Botones */
+button, .btn{
+  display:inline-flex; align-items:center; gap:8px;
+  background:var(--brand); color:var(--brand-ink); border:none; cursor:pointer;
+  padding:9px 14px; border-radius:10px; font-weight:600; text-decoration:none;
+  transition: transform .04s ease, box-shadow .2s ease;
+}
+button:hover, .btn:hover{ transform: translateY(-1px); box-shadow:0 6px 16px rgba(37,99,235,.25) }
+button.secondary, .btn.secondary{ background:#334155; color:#e2e8f0 }
+button.ghost, .btn.ghost{
+  background:transparent; color:var(--brand); border:1px solid var(--brand);
+}
+button.danger, .btn.danger{ background:var(--danger) }
+
+/* Tablas */
+table{ width:100%; border-collapse:collapse; background:var(--card); }
+th, td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--line) }
+th{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em }
+tr:hover td{ background: rgba(37,99,235,.04) }
+
+/* Badges */
+.badge{ display:inline-block; font-size:11px; padding:4px 8px; border-radius:999px; background:#e2e8f0; color:#0f172a }
+.badge.ok{ background:rgba(22,163,74,.14); color:#15803d }
+.badge.warn{ background:rgba(245,158,11,.16); color:#b45309 }
+.badge.danger{ background:rgba(220,38,38,.16); color:#b91c1c }
+
+/* Alerts / flashed messages */
+.alert{
+  border-radius:12px; padding:12px 14px; margin:10px 0;
+  border-left:6px solid var(--line); background:var(--card); box-shadow:var(--shadow);
+}
+.alert.success{ border-left-color:var(--ok) }
+.alert.warning{ border-left-color:var(--warn) }
+.alert.danger{ border-left-color:var(--danger) }
+
+/* File input (mejor “botón”) */
+.input-file{
+  display:flex; align-items:center; gap:10px; padding:10px; border:1px dashed var(--line);
+  border-radius:12px; background:rgba(148,163,184,.08);
+}
+.input-file input[type="file"]{ all:unset }
+
+/* Helpers */
+hr{ border:none; height:1px; background:var(--line); margin:14px 0 }
+.muted{ color:var(--muted) }
+.actions{ display:flex; gap:8px; flex-wrap:wrap }
+
+/* Responsive tweaks */
+@media (max-width:720px){
+  header nav a{ margin-left:8px; padding:6px 8px }
+}

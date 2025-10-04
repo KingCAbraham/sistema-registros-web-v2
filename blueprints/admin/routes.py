@@ -1,11 +1,8 @@
 # blueprints/admin/routes.py
-import io
-from flask import render_template, request, redirect, url_for, flash, session as _session
-from werkzeug.utils import secure_filename
+import io, csv
+from flask import render_template, request, redirect, url_for, flash, session as _session, send_file
 from db import SessionLocal
-from models import BaseGeneral, TipoConvenio, BocaCobranza, Usuario
-from services.base_general_loader import load_base_general_xlsx
-from werkzeug.security import generate_password_hash
+from models import BaseGeneral, TipoConvenio, BocaCobranza, Usuario, Registro
 
 # Usa el blueprint ya creado en __init__.py
 from . import admin_bp
@@ -15,6 +12,88 @@ def require_admin():
         flash("Acceso restringido a administradores.", "danger")
         return False
     return True
+
+# --- EXPORTAR REGISTROS POR SEMANA (CSV) ---
+from models import Registro, Usuario  # <-- agrega Usuario aquí
+
+@admin_bp.get("/export/semana")
+def export_semana():
+    if _session.get("role") != "admin":
+        flash("Acceso restringido a administradores.", "danger")
+        return redirect(url_for("auth.login"))
+
+    semana_str = (request.args.get("semana") or "").strip()
+    try:
+        semana = int(semana_str)
+        if not (1 <= semana <= 53):
+            raise ValueError()
+    except Exception:
+        flash("Parámetro 'semana' inválido.", "warning")
+        return redirect(url_for("admin.index"))
+
+    with SessionLocal() as db:
+        rows = (
+            db.query(
+                Registro.id,
+                Registro.cliente_unico,
+                Registro.nombre_cte_snap,
+                Registro.gerencia_snap,
+                Registro.producto_snap,
+                Registro.fidiapago_snap,
+                Registro.gestion_desc_snap,
+                Registro.fecha_promesa,
+                Registro.telefono,
+                Registro.semana,
+                Registro.notas,
+                Usuario.username.label("creado_por_username"),
+                Registro.creado_en,
+                TipoConvenio.nombre.label("tipo_convenio_nombre"),
+                BocaCobranza.nombre.label("boca_cobranza_nombre"),
+            )
+            .outerjoin(Usuario, Usuario.id == Registro.creado_por)
+            .outerjoin(TipoConvenio, TipoConvenio.id == Registro.tipo_convenio_id)
+            .outerjoin(BocaCobranza, BocaCobranza.id == Registro.boca_cobranza_id)
+            .filter(Registro.semana == semana)
+            .order_by(Registro.id.asc())
+            .all()
+        )
+
+    # CSV en memoria (BOM + UTF-8 para Excel)
+    sio = io.StringIO(newline="")
+    w = csv.writer(sio, lineterminator="\n")
+    w.writerow([
+        "ID", "CLIENTE_UNICO", "NOMBRE_SNAP", "GERENCIA_SNAP", "PRODUCTO_SNAP",
+        "FIDIAPAGO_SNAP", "GESTION_DESC_SNAP", "FECHA_PROMESA", "TELEFONO",
+        "SEMANA", "NOTAS", "CREADO_POR", "CREADO_EN",
+        "TIPO_CONVENIO", "BOCA_COBRANZA",
+    ])
+    for r in rows:
+        w.writerow([
+            r.id or "",
+            r.cliente_unico or "",
+            r.nombre_cte_snap or "",
+            r.gerencia_snap or "",
+            r.producto_snap or "",
+            r.fidiapago_snap or "",
+            (r.gestion_desc_snap or "").replace("\r", " ").replace("\n", " "),
+            r.fecha_promesa or "",
+            r.telefono or "",
+            r.semana or "",
+            (r.notas or "").replace("\r", " ").replace("\n", " "),
+            r.creado_por_username or "",
+            r.creado_en or "",
+            r.tipo_convenio_nombre or "",
+            r.boca_cobranza_nombre or "",
+        ])
+
+    csv_bytes = ("\ufeff" + sio.getvalue()).encode("utf-8")
+    filename = f"registros_semana_{semana}.csv"
+    return send_file(
+        io.BytesIO(csv_bytes),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,   # si usas Flask <2.0, cambia a attachment_filename=filename
+    )
 
 # (opcional) una portada del admin para el link "Admin"
 @admin_bp.get("/")

@@ -1,10 +1,17 @@
+
 {% extends "layout.html" %}
 {% block content %}
 <div class="card">
   <h3>Mis Registros (últimos 100)</h3>
   <table style="width:100%; border-collapse:collapse;">
     <tr>
-      <th>ID</th><th>Cliente</th><th>Tipo</th><th>Boca</th><th>Fecha Promesa</th><th>Creado</th>
+      <th>ID</th>
+      <th>Cliente</th>
+      <th>Tipo</th>
+      <th>Boca</th>
+      <th>Fecha Promesa</th>
+      <th>Archivos</th>
+      <th>Creado</th>
     </tr>
     {% for r in registros %}
     <tr>
@@ -13,6 +20,19 @@
       <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '' }}</td>
       <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '' }}</td>
       <td>{{ r.fecha_promesa }}</td>
+      <td>
+        {% if r.archivo_convenio %}
+          <a href="{{ url_for('registros.get_file', fname=r.archivo_convenio) }}" target="_blank">Convenio</a>
+        {% endif %}
+        {% if r.archivo_pago %}
+          {% if r.archivo_convenio %} · {% endif %}
+          <a href="{{ url_for('registros.get_file', fname=r.archivo_pago) }}" target="_blank">Pago</a>
+        {% endif %}
+        {% if r.archivo_gestion %}
+          {% if r.archivo_convenio or r.archivo_pago %} · {% endif %}
+          <a href="{{ url_for('registros.get_file', fname=r.archivo_gestion) }}" target="_blank">Gestión</a>
+        {% endif %}
+      </td>
       <td>{{ r.creado_en }}</td>
     </tr>
     {% endfor %}

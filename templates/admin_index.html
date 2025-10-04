@@ -1,7 +1,19 @@
 {% extends "layout.html" %}
 {% block content %}
-  <div class="card">
-    <h2>Panel de administración</h2>
-    <p>Usa el menú superior: Base General, Tipos, Bocas, Usuarios.</p>
-  </div>
+<!-- Dentro de admin_index.html -->
+<form method="get" action="{{ url_for('admin.export_semana') }}" style="margin-top:12px">
+  <label>Exportar registros por semana:</label>
+  <input type="number" name="semana" min="1" max="52" required>
+  <button type="submit">Descargar CSV</button>
+</form>
+<div class="card">
+  <h2>Panel de administración</h2>
+  <ul>
+    <li><a href="{{ url_for('admin.base_general') }}">Cargar Base General</a></li>
+    <li><a href="{{ url_for('admin.catalogo_tipos') }}">Catálogo: Tipos de convenio</a></li>
+    <li><a href="{{ url_for('admin.catalogo_bocas') }}">Catálogo: Bocas de cobranza</a></li>
+    <li><a href="{{ url_for('admin.usuarios_list') }}">Usuarios</a></li>
+    <li><a href="{{ url_for('admin.export_semana') }}">Exportar registros por semana</a></li>
+  </ul>
+</div>
 {% endblock %}

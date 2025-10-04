@@ -1,13 +1,22 @@
 # blueprints/registros/routes.py
+import os
+import uuid
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from sqlalchemy.orm import selectinload
+
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash,
+    session, jsonify, current_app, send_from_directory, abort
+)
+from werkzeug.utils import secure_filename
 from sqlalchemy import func
+
 from db import SessionLocal
 from models import Registro, BaseGeneral, TipoConvenio, BocaCobranza
-
 from . import registros_bp
 
 
+# ----------------- Helpers de auth -----------------
 def require_agent():
     role = session.get("role")
     if role not in ("agente", "admin", "supervisor", "gerente"):
@@ -16,19 +25,55 @@ def require_agent():
     return True
 
 
+# ----------------- Helpers de archivos -----------------
+def _allowed(filename: str) -> bool:
+    """Verifica extensión permitida contra Config.ALLOWED_EXTENSIONS."""
+    if "." not in filename:
+        return False
+    ext = filename.rsplit(".", 1)[1].lower()
+    return ext in current_app.config.get("ALLOWED_EXTENSIONS", set())
+
+
+def _save_upload(file_storage):
+    """
+    Guarda un FileStorage en UPLOAD_FOLDER con nombre seguro + UUID.
+    Devuelve el nombre de archivo guardado (str) o None si no se envió.
+    Lanza ValueError si la extensión no es válida.
+    """
+    if not file_storage or file_storage.filename == "":
+        return None
+
+    if not _allowed(file_storage.filename):
+        raise ValueError("Extensión no permitida (usa pdf, png, jpg, jpeg).")
+
+    base = current_app.config["UPLOAD_FOLDER"]
+    os.makedirs(base, exist_ok=True)
+
+    safe = secure_filename(file_storage.filename)
+    unique = f"{uuid.uuid4().hex}_{safe}"
+    file_storage.save(os.path.join(base, unique))
+    return unique
+
+
+# ----------------- Listado -----------------
 @registros_bp.get("/")
 def listado():
     if not require_agent():
         return redirect(url_for("auth.login"))
     user_id = session.get("user_id")
     with SessionLocal() as db:
-        q = db.query(Registro)
+        q = (
+            db.query(Registro)
+            .options(
+                selectinload(Registro.tipo_convenio),
+                selectinload(Registro.boca_cobranza),
+            )
+        )
         if session.get("role") == "agente":
             q = q.filter(Registro.creado_por == user_id)
         regs = q.order_by(Registro.id.desc()).limit(100).all()
     return render_template("registros_listado.html", registros=regs)
-
-
+# ----------------- Nuevo registro (form) -----------------
 @registros_bp.get("/nuevo")
 def nuevo():
     if not require_agent():
@@ -49,7 +94,7 @@ def nuevo():
     return render_template("registros_nuevo.html", tipos=tipos, bocas=bocas)
 
 
-# ==== NUEVO: API para AUTOCOMPLETE (sugerencias) ====
+# ----------------- API: Autocomplete por cliente_unico -----------------
 @registros_bp.get("/api/search_cliente")
 def api_search_cliente():
     """Devuelve sugerencias por cliente_unico prefix (hasta 10)."""
@@ -68,11 +113,10 @@ def api_search_cliente():
             .limit(10)
             .all()
         )
-    # [{cliente_unico:..., nombre_cte:...}, ...]
     return jsonify([{"cliente_unico": r[0], "nombre_cte": r[1] or ""} for r in rows])
 
 
-# ==== NUEVO: API para AUTOLLENAR por cliente_unico exacto ====
+# ----------------- API: Datos exactos del cliente -----------------
 @registros_bp.get("/api/datos_cliente")
 def api_datos_cliente():
     if not require_agent():
@@ -100,7 +144,7 @@ def api_datos_cliente():
     )
 
 
-# (opcional: dejamos la versión POST también por compatibilidad)
+# (opcional) versión POST legacy
 @registros_bp.post("/buscar_cliente")
 def buscar_cliente():
     if not require_agent():
@@ -127,12 +171,14 @@ def buscar_cliente():
     }
 
 
+# ----------------- Crear registro (con archivos) -----------------
 @registros_bp.post("/crear")
 def crear():
     if not require_agent():
         return redirect(url_for("auth.login"))
 
     form = request.form
+    files = request.files
     user_id = session.get("user_id")
 
     cliente_unico = (form.get("cliente_unico") or "").strip()
@@ -153,6 +199,15 @@ def crear():
             flash("Cliente no existe en la base del día", "danger")
             return redirect(url_for("registros.nuevo"))
 
+        # --- Guardar archivos (si vienen) ---
+        try:
+            archivo_convenio = _save_upload(files.get("archivo_convenio"))
+            archivo_pago = _save_upload(files.get("archivo_pago"))
+            archivo_gestion = _save_upload(files.get("archivo_gestion"))
+        except Exception as e:
+            flash(f"Error en archivos: {e}", "danger")
+            return redirect(url_for("registros.nuevo"))
+
         reg = Registro(
             cliente_unico=cliente_unico,
             nombre_cte_snap=base.nombre_cte,
@@ -167,9 +222,65 @@ def crear():
             semana=int(semana) if semana else None,
             notas=notas or None,
             creado_por=user_id,
+
+            # nuevos campos de evidencia
+            archivo_convenio=archivo_convenio,
+            archivo_pago=archivo_pago,
+            archivo_gestion=archivo_gestion,
         )
         db.add(reg)
         db.commit()
 
     flash("Registro creado", "success")
     return redirect(url_for("registros.listado"))
+
+
+# ----------------- Servir archivo (protegido) -----------------
+@registros_bp.get("/file/<string:fname>")
+def get_file(fname):
+    """Sirve un archivo desde UPLOAD_FOLDER; requiere sesión."""
+    if not session.get("user_id"):
+        return redirect(url_for("auth.login"))
+
+    if "/" in fname or "\\" in fname:
+        abort(400)
+
+    base = current_app.config["UPLOAD_FOLDER"]
+    full = os.path.join(base, fname)
+    if not os.path.isfile(full):
+        abort(404)
+    return send_from_directory(base, fname, as_attachment=False)
+
+@registros_bp.get("/resumen")
+def resumen():
+    if not require_agent():
+        return redirect(url_for("auth.login"))
+
+    semana = request.args.get("semana", type=int)
+    user_id = session.get("user_id")
+
+    with SessionLocal() as db:
+        q = db.query(Registro).filter(Registro.creado_por == user_id)
+        if semana:
+            q = q.filter(Registro.semana == semana)
+        registros = q.order_by(Registro.id.desc()).all()
+
+        # Totales simples
+        total = len(registros)
+        # por tipo / boca
+        por_tipo = {}
+        por_boca = {}
+        for r in registros:
+            t = r.tipo_convenio.nombre if r.tipo_convenio else "(s/tipo)"
+            b = r.boca_cobranza.nombre if r.boca_cobranza else "(s/boca)"
+            por_tipo[t] = por_tipo.get(t, 0) + 1
+            por_boca[b] = por_boca.get(b, 0) + 1
+
+    return render_template(
+        "registros_resumen.html",
+        registros=registros,
+        semana=semana,
+        total=total,
+        por_tipo=por_tipo,
+        por_boca=por_boca,
+    )
