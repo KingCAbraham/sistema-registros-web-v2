@@ -1,5 +1,6 @@
 # db.py
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from config import Config
 
@@ -28,3 +29,33 @@ SessionLocal = sessionmaker(
 
 # Base declarativa para tus modelos
 Base = declarative_base()
+
+
+def ensure_latest_schema() -> None:
+    """Aplica ajustes mínimos al esquema si faltan columnas nuevas."""
+    try:
+        with engine.begin() as conn:
+            inspector = inspect(conn)
+            if "registros" not in inspector.get_table_names():
+                return
+
+            existing = {col["name"] for col in inspector.get_columns("registros")}
+            statements: list[str] = []
+
+            if "pago_inicial" not in existing:
+                statements.append(
+                    "ALTER TABLE registros ADD COLUMN pago_inicial DECIMAL(12,2) NULL"
+                )
+            if "pago_semanal" not in existing:
+                statements.append(
+                    "ALTER TABLE registros ADD COLUMN pago_semanal DECIMAL(12,2) NULL"
+                )
+            if "duracion_semanas" not in existing:
+                statements.append(
+                    "ALTER TABLE registros ADD COLUMN duracion_semanas INT NULL"
+                )
+
+            for statement in statements:
+                conn.execute(text(statement))
+    except SQLAlchemyError as exc:
+        print("[WARN] No se pudo aplicar la migración automática de registros:", exc)

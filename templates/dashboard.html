@@ -1,24 +1,24 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="card">
-  <h2 style="margin-top:0;">Dashboard</h2>
+<div class="card stack">
+  <h2>Dashboard</h2>
 
   {% if current_role == 'admin' %}
-    <p>Accesos rápidos del administrador:</p>
-    <p style="display:flex; gap:10px; flex-wrap:wrap;">
+    <p class="muted">Accesos rápidos del administrador:</p>
+    <div class="actions">
       <a class="btn" href="{{ url_for('admin.index') }}">Panel admin</a>
       <a class="btn" href="{{ url_for('admin.base_general') }}">Base General</a>
       <a class="btn" href="{{ url_for('admin.catalogo_tipos') }}">Tipos</a>
       <a class="btn" href="{{ url_for('admin.catalogo_bocas') }}">Bocas</a>
       <a class="btn" href="{{ url_for('admin.usuarios_list') }}">Usuarios</a>
-    </p>
+    </div>
   {% elif current_role == 'agente' %}
-    <p>Accesos rápidos del agente:</p>
-    <p style="display:flex; gap:10px; flex-wrap:wrap;">
+    <p class="muted">Accesos rápidos del agente:</p>
+    <div class="actions">
       <a class="btn" href="{{ url_for('registros.nuevo') }}">Nuevo registro</a>
       <a class="btn" href="{{ url_for('registros.listado') }}">Mis registros</a>
-    </p>
+    </div>
   {% else %}
     <p>Inicia sesión para ver tus opciones.</p>
   {% endif %}

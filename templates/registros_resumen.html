@@ -1,52 +1,92 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card">
-  <h2>Resumen {% if semana %}Semana {{ semana }}{% else %}(todas){% endif %}</h2>
-
-  <form method="get" action="{{ url_for('registros.resumen') }}" style="margin-bottom:12px">
-    <label>Semana:</label>
-    <input type="number" name="semana" min="1" max="52" value="{{ semana or '' }}">
-    <button type="submit">Filtrar</button>
-  </form>
-
-  <p>Total de registros: <strong>{{ total }}</strong></p>
+<div class="card stack">
+  <div>
+    <h2>Resumen {% if semana %}Semana {{ semana }}{% else %}(todas){% endif %}</h2>
+    <form method="get" action="{{ url_for('registros.resumen') }}" class="field inline max-360">
+      <label for="f_semana">Semana</label>
+      <input id="f_semana" type="number" name="semana" min="1" max="52" value="{{ semana or '' }}">
+      <button type="submit">Filtrar</button>
+    </form>
+  </div>
 
   <div class="row">
-    <div>
-      <h4>Por tipo</h4>
+    <div class="summary-card">
+      <h3>Total registros</h3>
+      <strong class="big-number">{{ total }}</strong>
+    </div>
+    <div class="summary-card">
+      <h3>Pago inicial</h3>
+      <strong>{{ total_pagos_inicial | currency_mx }}</strong>
+    </div>
+    <div class="summary-card">
+      <h3>Pago semanal</h3>
+      <strong>{{ total_pagos_semanal | currency_mx }}</strong>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card flat">
+      <h3>Por tipo</h3>
       <ul>
         {% for k,v in por_tipo.items() %}
-          <li>{{ k }}: {{ v }}</li>
+          <li><strong>{{ k }}</strong>: {{ v }}</li>
+        {% else %}
+          <li class="muted">Sin registros</li>
         {% endfor %}
       </ul>
     </div>
-    <div>
-      <h4>Por boca</h4>
+    <div class="card flat">
+      <h3>Por boca</h3>
       <ul>
         {% for k,v in por_boca.items() %}
-          <li>{{ k }}: {{ v }}</li>
+          <li><strong>{{ k }}</strong>: {{ v }}</li>
+        {% else %}
+          <li class="muted">Sin registros</li>
         {% endfor %}
       </ul>
     </div>
   </div>
 
-  <hr>
-  <h4>Últimos registros</h4>
-  <table style="width:100%;border-collapse:collapse">
-    <tr>
-      <th>ID</th><th>Cliente</th><th>Tipo</th><th>Boca</th><th>Fecha promesa</th><th>Semana</th><th>Creado</th>
-    </tr>
-    {% for r in registros[:50] %}
-    <tr>
-      <td>{{ r.id }}</td>
-      <td>{{ r.cliente_unico }} — {{ r.nombre_cte_snap }}</td>
-      <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '' }}</td>
-      <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '' }}</td>
-      <td>{{ r.fecha_promesa }}</td>
-      <td>{{ r.semana }}</td>
-      <td>{{ r.creado_en }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Tipo</th>
+          <th>Boca</th>
+          <th>Fecha promesa</th>
+          <th>Semana</th>
+          <th>Pagos</th>
+          <th>Creado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros[:50] %}
+        <tr>
+          <td>{{ r.id }}</td>
+          <td>
+            <strong>{{ r.cliente_unico }}</strong><br>
+            <span class="muted">{{ r.nombre_cte_snap }}</span>
+          </td>
+          <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '—' }}</td>
+          <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '—' }}</td>
+          <td>{{ r.fecha_promesa }}</td>
+          <td>{{ r.semana }}</td>
+          <td>
+            <div>{{ r.pago_inicial | currency_mx }}</div>
+            <div class="muted">Semanal: {{ r.pago_semanal | currency_mx }}</div>
+          </td>
+          <td>{{ r.creado_en }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="table-empty">Sin registros para mostrar.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
