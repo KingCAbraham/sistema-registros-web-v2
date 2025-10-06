@@ -6,6 +6,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from sqlalchemy.orm import selectinload
 
+from markupsafe import Markup, escape
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash,
     session, jsonify, current_app, send_from_directory, abort
@@ -100,6 +102,30 @@ def _parse_duration(raw: str) -> int | None:
     return duracion_val
 
 
+def _format_currency(value):
+    if value is None:
+        return ""
+    try:
+        number = Decimal(value)
+    except (InvalidOperation, TypeError, ValueError):
+        return ""
+    return f"${number:,.2f}"
+
+
+def _build_select_options(items, selected_id, placeholder="Selecciona una opción"):
+    placeholder_selected = selected_id in (None, "")
+    selected = " selected" if placeholder_selected else ""
+    options = [
+        f'<option value="" disabled{selected}>{escape(placeholder)}</option>'
+    ]
+    for item in items:
+        opt_selected = " selected" if selected_id == getattr(item, "id", None) else ""
+        label = escape(getattr(item, "nombre", ""))
+        value = escape(str(getattr(item, "id", "")))
+        options.append(f'<option value="{value}"{opt_selected}>{label}</option>')
+    return Markup("\n".join(options))
+
+
 # ----------------- Listado -----------------
 @registros_bp.get("/")
 def listado():
@@ -142,6 +168,15 @@ def nuevo():
             .order_by(BocaCobranza.nombre.asc())
             .all()
         )
+    tipo_options = _build_select_options(tipos, None)
+    boca_options = _build_select_options(bocas, None)
+    return render_template(
+        "registros_nuevo.html",
+        tipo_options=tipo_options,
+        boca_options=boca_options,
+        registro=None,
+        is_edit=False,
+        format_currency=_format_currency,
     return render_template(
         "registros_nuevo.html",
         tipos=tipos,
@@ -181,6 +216,11 @@ def editar(registro_id: int):
 
     return render_template(
         "registros_nuevo.html",
+        tipo_options=_build_select_options(tipos, registro.tipo_convenio_id),
+        boca_options=_build_select_options(bocas, registro.boca_cobranza_id),
+        registro=registro,
+        is_edit=True,
+        format_currency=_format_currency,
         tipos=tipos,
         bocas=bocas,
         registro=registro,

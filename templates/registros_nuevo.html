@@ -7,6 +7,48 @@
     <p class="muted">Captura o corrige la información del convenio en un solo lugar.</p>
   </div>
 
+  <form method="post"
+        action="{{ url_for('registros.actualizar', registro_id=registro.id) if is_edit else url_for('registros.crear') }}"
+        enctype="multipart/form-data"
+        class="stack">
+    <fieldset class="stack">
+      <legend>Datos del cliente</legend>
+      <div class="row">
+        <div class="field">
+          <label for="cliente_unico">Cliente único</label>
+          <input id="cliente_unico"
+                 name="cliente_unico"
+                 list="dl_cu"
+                 autocomplete="off"
+                 placeholder="Buscar..."
+                 value="{{ registro.cliente_unico if is_edit else '' }}"
+                 required>
+          <datalist id="dl_cu"></datalist>
+          <p class="help">Escribe al menos dos caracteres para ver sugerencias.</p>
+        </div>
+        <div class="field">
+          <label for="nombre_cte">Nombre</label>
+          <input id="nombre_cte" type="text" value="{{ registro.nombre_cte_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field">
+          <label for="gerencia">Gerencia</label>
+          <input id="gerencia" type="text" value="{{ registro.gerencia_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field">
+          <label for="producto">Producto</label>
+          <input id="producto" type="text" value="{{ registro.producto_snap if is_edit else '' }}" readonly>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="fidiapago">FIDIAPAGO</label>
+          <input id="fidiapago" type="text" value="{{ registro.fidiapago_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field wide">
+          <label for="gestion_desc">GESTION_DESC</label>
+          <textarea id="gestion_desc" rows="4" readonly>{{ registro.gestion_desc_snap if is_edit else '' }}</textarea>
+
 <div class="card">
   <h2>{{ 'Editar registro' if is_edit else 'Nuevo registro' }}</h2>
 
@@ -142,6 +184,65 @@
     </fieldset>
 
     <fieldset class="stack">
+      <legend>Detalle del convenio</legend>
+      <div class="row">
+        <div class="field">
+          <label for="tipo_convenio_id">Tipo de convenio</label>
+          <select id="tipo_convenio_id" name="tipo_convenio_id" required>
+            {{ tipo_options }}
+          </select>
+        </div>
+        <div class="field">
+          <label for="boca_cobranza_id">Boca de cobranza</label>
+          <select id="boca_cobranza_id" name="boca_cobranza_id" required>
+            {{ boca_options }}
+          </select>
+        </div>
+        <div class="field">
+          <label for="fecha_promesa">Fecha promesa</label>
+          <input id="fecha_promesa" type="date" name="fecha_promesa" value="{{ registro.fecha_promesa.isoformat() if is_edit and registro.fecha_promesa else '' }}">
+        </div>
+        <div class="field">
+          <label for="telefono">Teléfono</label>
+          <input id="telefono" type="text" name="telefono" placeholder="10 dígitos" value="{{ registro.telefono if is_edit and registro.telefono else '' }}">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="stack">
+      <legend>Plan de pagos</legend>
+      <div class="row">
+        <div class="field">
+          <label for="pago_inicial">Pago inicial</label>
+          <input id="pago_inicial"
+                 type="text"
+                 name="pago_inicial"
+                 class="currency"
+                 data-currency
+                 placeholder="$0.00"
+                 value="{{ format_currency(registro.pago_inicial) if is_edit else '' }}">
+          <p class="help">Ingresa el monto acordado al momento de la promesa.</p>
+        </div>
+        <div class="field">
+          <label for="pago_semanal">Pago semanal</label>
+          <input id="pago_semanal"
+                 type="text"
+                 name="pago_semanal"
+                 class="currency"
+                 data-currency
+                 placeholder="$0.00"
+                 value="{{ format_currency(registro.pago_semanal) if is_edit else '' }}">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="duracion_semanas">Duración (semanas)</label>
+          <input id="duracion_semanas" type="number" name="duracion_semanas" min="1" max="120" placeholder="0" value="{{ registro.duracion_semanas if is_edit and registro.duracion_semanas else '' }}">
+        </div>
+        <div class="field">
+          <label for="semana">Semana (1-52)</label>
+          <input id="semana" type="number" name="semana" min="1" max="52" placeholder="Ej. 24" value="{{ registro.semana if is_edit and registro.semana else '' }}">
+        </div>
       <legend>Plan de pagos</legend>
       <div class="row">
         <div class="field">
@@ -187,6 +288,18 @@
     </fieldset>
 
     <fieldset class="stack">
+      <legend>Notas</legend>
+      <div class="field">
+        <label for="notas">Notas</label>
+        <textarea id="notas" name="notas" rows="4" placeholder="Observaciones relevantes">{{ registro.notas if is_edit and registro.notas else '' }}</textarea>
+      </div>
+    </fieldset>
+
+    <fieldset class="stack">
+      <legend>Evidencias</legend>
+      <div class="row tight">
+        <div class="field">
+          <label for="archivo_convenio">Convenio (PDF/imagen)</label>
       <legend>Evidencias</legend>
       <div class="row tight">
         <div class="field">
@@ -302,6 +415,9 @@
 
     <div class="actions">
       <button type="submit">{{ 'Actualizar' if is_edit else 'Guardar' }}</button>
+
+    <div class="actions">
+      <button type="submit">{{ 'Actualizar' if is_edit else 'Guardar' }}</button>
           <input type="file" name="archivo_gestion" accept=".pdf,.png,.jpg,.jpeg">
         </div>
       </div>
@@ -315,6 +431,9 @@
   </form>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
 <script>
   const $cu   = document.getElementById('cliente_unico');
   const $dl   = document.getElementById('dl_cu');
