@@ -100,6 +100,9 @@ CREATE TABLE registros (
   telefono           VARCHAR(30) DEFAULT NULL,
   semana             INT DEFAULT NULL,       -- semana 1..52
   anio               SMALLINT DEFAULT NULL,  -- si decides usar año+semana
+  pago_inicial       DECIMAL(12,2) DEFAULT NULL,
+  pago_semanal       DECIMAL(12,2) DEFAULT NULL,
+  duracion_semanas   INT DEFAULT NULL,
   notas              TEXT DEFAULT NULL,
 
   -- Archivos (rutas relativas guardadas en disco)

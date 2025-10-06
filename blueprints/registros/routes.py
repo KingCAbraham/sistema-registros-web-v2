@@ -2,6 +2,8 @@
 import os
 import uuid
 from datetime import date
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 from sqlalchemy.orm import selectinload
 
 from flask import (
@@ -9,7 +11,6 @@ from flask import (
     session, jsonify, current_app, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from sqlalchemy import func
 
 from db import SessionLocal
 from models import Registro, BaseGeneral, TipoConvenio, BocaCobranza
@@ -188,6 +189,47 @@ def crear():
     telefono = (form.get("telefono") or "").strip()
     semana = form.get("semana")
     notas = (form.get("notas") or "").strip()
+    pago_inicial_raw = (form.get("pago_inicial") or "").strip()
+    pago_semanal_raw = (form.get("pago_semanal") or "").strip()
+    duracion_raw = (form.get("duracion_semanas") or "").strip()
+
+    def parse_currency(value: str) -> Decimal | None:
+        if not value:
+            return None
+        cleaned = (
+            value.replace("MXN", "")
+            .replace("$", "")
+            .replace("\u00a0", " ")
+            .replace(" ", "")
+        )
+        if "," in cleaned and "." not in cleaned:
+            cleaned = cleaned.replace(",", ".")
+        cleaned = cleaned.replace(",", "")
+        if not cleaned:
+            return None
+        try:
+            return Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        except (InvalidOperation, ValueError):
+            raise ValueError("Formato de moneda inválido")
+
+    try:
+        pago_inicial = parse_currency(pago_inicial_raw)
+        pago_semanal = parse_currency(pago_semanal_raw)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("registros.nuevo"))
+
+    duracion_semanas = None
+    if duracion_raw:
+        try:
+            duracion_val = int(duracion_raw)
+        except ValueError:
+            flash("Duración en semanas inválida", "danger")
+            return redirect(url_for("registros.nuevo"))
+        if duracion_val < 1:
+            flash("La duración debe ser al menos de una semana", "danger")
+            return redirect(url_for("registros.nuevo"))
+        duracion_semanas = duracion_val
 
     if not cliente_unico:
         flash("Cliente único es obligatorio", "warning")
@@ -220,6 +262,9 @@ def crear():
             fecha_promesa=date.fromisoformat(fecha_promesa) if fecha_promesa else date.today(),
             telefono=telefono or None,
             semana=int(semana) if semana else None,
+            pago_inicial=pago_inicial,
+            pago_semanal=pago_semanal,
+            duracion_semanas=duracion_semanas,
             notas=notas or None,
             creado_por=user_id,
 
@@ -267,6 +312,8 @@ def resumen():
 
         # Totales simples
         total = len(registros)
+        total_pagos_inicial = Decimal("0")
+        total_pagos_semanal = Decimal("0")
         # por tipo / boca
         por_tipo = {}
         por_boca = {}
@@ -275,6 +322,10 @@ def resumen():
             b = r.boca_cobranza.nombre if r.boca_cobranza else "(s/boca)"
             por_tipo[t] = por_tipo.get(t, 0) + 1
             por_boca[b] = por_boca.get(b, 0) + 1
+            if r.pago_inicial:
+                total_pagos_inicial += r.pago_inicial
+            if r.pago_semanal:
+                total_pagos_semanal += r.pago_semanal
 
     return render_template(
         "registros_resumen.html",
@@ -283,4 +334,6 @@ def resumen():
         total=total,
         por_tipo=por_tipo,
         por_boca=por_boca,
+        total_pagos_inicial=total_pagos_inicial,
+        total_pagos_semanal=total_pagos_semanal,
     )

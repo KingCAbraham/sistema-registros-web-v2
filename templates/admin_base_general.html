@@ -1,12 +1,16 @@
 {% extends "layout.html" %}
 {% block content %}
-  <div class="card">
-    <h2>Cargar base_general (.xlsx)</h2>
-    <form action="{{ url_for('admin.base_general') }}" method="post" enctype="multipart/form-data">
-      <label>Archivo XLSX</label>
-      <input type="file" name="archivo" accept=".xlsx" required>
-      <div style="margin-top:10px;">
+  <div class="card stack">
+    <h2>Cargar base general (.xlsx)</h2>
+    <form action="{{ url_for('admin.base_general') }}" method="post" enctype="multipart/form-data" class="stack max-480">
+      <div class="field">
+        <label for="archivo">Archivo XLSX</label>
+        <input id="archivo" type="file" name="archivo" accept=".xlsx" required>
+        <p class="help">El archivo debe contener las columnas CLIENTE_UNICO, NOMBRE_CTE, GERENCIA, PRODUCTO, FIDIAPAGO y GESTION_DESC.</p>
+      </div>
+      <div class="actions">
         <button type="submit">Cargar</button>
+        <a class="btn secondary" href="{{ url_for('admin.index') }}">Cancelar</a>
       </div>
     </form>
   </div>

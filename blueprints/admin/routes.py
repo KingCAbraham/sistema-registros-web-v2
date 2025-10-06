@@ -1,8 +1,22 @@
 # blueprints/admin/routes.py
-import io, csv
-from flask import render_template, request, redirect, url_for, flash, session as _session, send_file
+import io
+import csv
+
+from flask import (
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session as _session,
+    send_file,
+)
+from werkzeug.security import generate_password_hash
+from werkzeug.utils import secure_filename
+
 from db import SessionLocal
 from models import BaseGeneral, TipoConvenio, BocaCobranza, Usuario, Registro
+from services.base_general_loader import load_base_general_xlsx
 
 # Usa el blueprint ya creado en __init__.py
 from . import admin_bp
@@ -14,7 +28,6 @@ def require_admin():
     return True
 
 # --- EXPORTAR REGISTROS POR SEMANA (CSV) ---
-from models import Registro, Usuario  # <-- agrega Usuario aquí
 
 @admin_bp.get("/export/semana")
 def export_semana():
@@ -44,6 +57,9 @@ def export_semana():
                 Registro.fecha_promesa,
                 Registro.telefono,
                 Registro.semana,
+                Registro.pago_inicial,
+                Registro.pago_semanal,
+                Registro.duracion_semanas,
                 Registro.notas,
                 Usuario.username.label("creado_por_username"),
                 Registro.creado_en,
@@ -64,7 +80,8 @@ def export_semana():
     w.writerow([
         "ID", "CLIENTE_UNICO", "NOMBRE_SNAP", "GERENCIA_SNAP", "PRODUCTO_SNAP",
         "FIDIAPAGO_SNAP", "GESTION_DESC_SNAP", "FECHA_PROMESA", "TELEFONO",
-        "SEMANA", "NOTAS", "CREADO_POR", "CREADO_EN",
+        "SEMANA", "PAGO_INICIAL", "PAGO_SEMANAL", "DURACION_SEMANAS", "NOTAS",
+        "CREADO_POR", "CREADO_EN",
         "TIPO_CONVENIO", "BOCA_COBRANZA",
     ])
     for r in rows:
@@ -79,6 +96,9 @@ def export_semana():
             r.fecha_promesa or "",
             r.telefono or "",
             r.semana or "",
+            r.pago_inicial or "",
+            r.pago_semanal or "",
+            r.duracion_semanas or "",
             (r.notas or "").replace("\r", " ").replace("\n", " "),
             r.creado_por_username or "",
             r.creado_en or "",
@@ -198,9 +218,6 @@ def usuarios_list():
     with SessionLocal() as db:
         users = db.query(Usuario).order_by(Usuario.username.asc()).all()
     return render_template("admin_usuarios.html", usuarios=users)
-
-# blueprints/admin/routes.py  (AÑADIR)
-from werkzeug.security import generate_password_hash
 
 @admin_bp.post("/usuarios")
 def usuarios_create():
