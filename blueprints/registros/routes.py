@@ -1,5 +1,5 @@
+# blueprints/registros/routes.py
 """Rutas del blueprint de registros."""
-
 from __future__ import annotations
 
 import os
@@ -9,9 +9,6 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from markupsafe import Markup, escape
 from sqlalchemy.orm import selectinload
-
-from markupsafe import Markup, escape
-
 from flask import (
     render_template,
     request,
@@ -32,11 +29,9 @@ from . import registros_bp
 
 
 # ---------------------------------------------------------------------------
-# Helpers de autenticación y autorización
+# Helpers de autenticación
 # ---------------------------------------------------------------------------
-
 def require_agent() -> bool:
-    """Valida que el usuario tenga un rol con acceso al módulo."""
     role = session.get("role")
     if role not in {"agente", "admin", "supervisor", "gerente"}:
         flash("Inicia sesión.", "warning")
@@ -45,11 +40,9 @@ def require_agent() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Helpers de archivos y parsing
+# Helpers de archivos / parsing / formato
 # ---------------------------------------------------------------------------
-
 def _allowed(filename: str) -> bool:
-    """Verifica extensión permitida contra Config.ALLOWED_EXTENSIONS."""
     if "." not in filename:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
@@ -57,59 +50,55 @@ def _allowed(filename: str) -> bool:
 
 
 def _save_upload(file_storage):
-    """Guarda el archivo con nombre seguro y devuelve el nombre generado."""
+    """Guarda archivo en UPLOAD_FOLDER con nombre seguro+UUID. Devuelve nombre o None."""
     if not file_storage or file_storage.filename == "":
         return None
-
     if not _allowed(file_storage.filename):
         raise ValueError("Extensión no permitida (usa pdf, png, jpg, jpeg).")
 
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
-    os.makedirs(upload_folder, exist_ok=True)
+    base = current_app.config["UPLOAD_FOLDER"]
+    os.makedirs(base, exist_ok=True)
 
-    safe_name = secure_filename(file_storage.filename)
-    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
-    file_storage.save(os.path.join(upload_folder, unique_name))
-    return unique_name
+    safe = secure_filename(file_storage.filename)
+    unique = f"{uuid.uuid4().hex}_{safe}"
+    file_storage.save(os.path.join(base, unique))
+    return unique
 
 
-def _delete_file(filename: str | None) -> None:
-    if not filename:
+def _delete_file(fname: str | None) -> None:
+    if not fname:
         return
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
-    path = os.path.join(upload_folder, filename)
+    base = current_app.config["UPLOAD_FOLDER"]
+    path = os.path.join(base, fname)
     try:
         os.remove(path)
     except OSError:
         pass
 
 
-def _parse_currency(raw: str) -> Decimal | None:
+def _parse_currency(raw: str | None) -> Decimal | None:
     if not raw:
         return None
-
     cleaned = (
         raw.replace("MXN", "")
         .replace("$", "")
         .replace("\u00a0", " ")
         .replace(" ", "")
     )
+    # si viene con separador europeo "1.234,56"
     if "," in cleaned and "." not in cleaned:
         cleaned = cleaned.replace(",", ".")
     cleaned = cleaned.replace(",", "")
-
     if not cleaned:
         return None
-
     try:
         value = Decimal(cleaned)
     except (InvalidOperation, ValueError) as exc:
         raise ValueError("Formato de moneda inválido") from exc
-
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _parse_duration(raw: str) -> int | None:
+def _parse_duration(raw: str | None) -> int | None:
     if not raw:
         return None
     try:
@@ -180,76 +169,6 @@ def _aplicar_snapshot(registro: Registro, base: BaseGeneral) -> None:
 # ---------------------------------------------------------------------------
 # Vistas
 # ---------------------------------------------------------------------------
-
-def _delete_file(fname: str | None):
-    if not fname:
-        return
-    base = current_app.config["UPLOAD_FOLDER"]
-    path = os.path.join(base, fname)
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-
-
-def _parse_currency(value: str) -> Decimal | None:
-    if not value:
-        return None
-
-    cleaned = (
-        value.replace("MXN", "")
-        .replace("$", "")
-        .replace("\u00a0", " ")
-        .replace(" ", "")
-    )
-    if "," in cleaned and "." not in cleaned:
-        cleaned = cleaned.replace(",", ".")
-    cleaned = cleaned.replace(",", "")
-    if not cleaned:
-        return None
-    try:
-        return Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    except (InvalidOperation, ValueError):
-        raise ValueError("Formato de moneda inválido")
-
-
-def _parse_duration(raw: str) -> int | None:
-    if not raw:
-        return None
-    try:
-        duracion_val = int(raw)
-    except ValueError as exc:
-        raise ValueError("Duración en semanas inválida") from exc
-    if duracion_val < 1:
-        raise ValueError("La duración debe ser al menos de una semana")
-    return duracion_val
-
-
-def _format_currency(value):
-    if value is None:
-        return ""
-    try:
-        number = Decimal(value)
-    except (InvalidOperation, TypeError, ValueError):
-        return ""
-    return f"${number:,.2f}"
-
-
-def _build_select_options(items, selected_id, placeholder="Selecciona una opción"):
-    placeholder_selected = selected_id in (None, "")
-    selected = " selected" if placeholder_selected else ""
-    options = [
-        f'<option value="" disabled{selected}>{escape(placeholder)}</option>'
-    ]
-    for item in items:
-        opt_selected = " selected" if selected_id == getattr(item, "id", None) else ""
-        label = escape(getattr(item, "nombre", ""))
-        value = escape(str(getattr(item, "id", "")))
-        options.append(f'<option value="{value}"{opt_selected}>{label}</option>')
-    return Markup("\n".join(options))
-
-
-# ----------------- Listado -----------------
 @registros_bp.get("/")
 def listado():
     if not require_agent():
@@ -259,7 +178,7 @@ def listado():
     role = session.get("role")
 
     with SessionLocal() as db:
-        query = (
+        q = (
             db.query(Registro)
             .options(
                 selectinload(Registro.tipo_convenio),
@@ -267,27 +186,17 @@ def listado():
             )
         )
         if role == "agente":
-            query = query.filter(Registro.creado_por == user_id)
-        registros = query.order_by(Registro.id.desc()).limit(100).all()
-
-    return render_template(
-        "registros_listado.html",
-        registros=registros,
-        role=role,
-        user_id=user_id,
-    )
-
-
-        if session.get("role") == "agente":
             q = q.filter(Registro.creado_por == user_id)
         regs = q.order_by(Registro.id.desc()).limit(100).all()
+
     return render_template(
         "registros_listado.html",
         registros=regs,
         role=role,
         user_id=user_id,
     )
-# ----------------- Nuevo registro (form) -----------------
+
+
 @registros_bp.get("/nuevo")
 def nuevo():
     if not require_agent():
@@ -296,40 +205,14 @@ def nuevo():
     with SessionLocal() as db:
         tipos, bocas = _load_catalogos(db)
 
-    return render_template(
-        "registros_nuevo.html",
-        tipo_options=_build_select_options(tipos, None),
-        boca_options=_build_select_options(bocas, None),
-        registro=None,
-        is_edit=False,
-        format_currency=_format_currency,
-        tipos = (
-            db.query(TipoConvenio)
-            .filter(TipoConvenio.activo == 1)
-            .order_by(TipoConvenio.nombre.asc())
-            .all()
-        )
-        bocas = (
-            db.query(BocaCobranza)
-            .filter(BocaCobranza.activo == 1)
-            .order_by(BocaCobranza.nombre.asc())
-            .all()
-        )
-    tipo_options = _build_select_options(tipos, None)
-    boca_options = _build_select_options(bocas, None)
-    return render_template(
-        "registros_nuevo.html",
-        tipo_options=tipo_options,
-        boca_options=boca_options,
-        registro=None,
-        is_edit=False,
-        format_currency=_format_currency,
+    # Tu template original itera sobre `tipos` y `bocas`
     return render_template(
         "registros_nuevo.html",
         tipos=tipos,
         bocas=bocas,
         registro=None,
         is_edit=False,
+        format_currency=_format_currency,
     )
 
 
@@ -342,43 +225,36 @@ def editar(registro_id: int):
     role = session.get("role")
 
     with SessionLocal() as db:
-        registro = db.query(Registro).filter(Registro.id == registro_id).first()
+        registro = (
+            db.query(Registro)
+            .options(
+                selectinload(Registro.tipo_convenio),
+                selectinload(Registro.boca_cobranza),
+            )
+            .filter(Registro.id == registro_id)
+            .first()
+        )
         if not registro:
             abort(404)
         if role == "agente" and registro.creado_por != user_id:
             abort(403)
 
         tipos, bocas = _load_catalogos(db)
-        tipos = (
-            db.query(TipoConvenio)
-            .filter(TipoConvenio.activo == 1)
-            .order_by(TipoConvenio.nombre.asc())
-            .all()
-        )
-        bocas = (
-            db.query(BocaCobranza)
-            .filter(BocaCobranza.activo == 1)
-            .order_by(BocaCobranza.nombre.asc())
-            .all()
-        )
 
     return render_template(
         "registros_nuevo.html",
-        tipo_options=_build_select_options(tipos, registro.tipo_convenio_id),
-        boca_options=_build_select_options(bocas, registro.boca_cobranza_id),
-        registro=registro,
-        is_edit=True,
-        format_currency=_format_currency,
         tipos=tipos,
         bocas=bocas,
         registro=registro,
         is_edit=True,
+        format_currency=_format_currency,
     )
 
 
+# ----------------- APIs de ayuda (autocomplete / autollenado) -----------------
 @registros_bp.get("/api/search_cliente")
 def api_search_cliente():
-    """Autocomplete basado en prefijo de cliente único."""
+    """Devuelve sugerencias por cliente_unico prefix (hasta 10)."""
     if not require_agent():
         return jsonify([]), 401
 
@@ -454,6 +330,7 @@ def buscar_cliente():
     }
 
 
+# ----------------- Crear / Actualizar -----------------
 @registros_bp.post("/crear")
 def crear():
     if not require_agent():
@@ -482,53 +359,9 @@ def crear():
     except ValueError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("registros.nuevo"))
-    except ValueError as exc:
-        flash(str(exc), "danger")
-        return redirect(url_for("registros.nuevo"))
-    def parse_currency(value: str) -> Decimal | None:
-        if not value:
-            return None
-        cleaned = (
-            value.replace("MXN", "")
-            .replace("$", "")
-            .replace("\u00a0", " ")
-            .replace(" ", "")
-        )
-        if "," in cleaned and "." not in cleaned:
-            cleaned = cleaned.replace(",", ".")
-        cleaned = cleaned.replace(",", "")
-        if not cleaned:
-            return None
-        try:
-            return Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        except (InvalidOperation, ValueError):
-            raise ValueError("Formato de moneda inválido")
-
-    try:
-        pago_inicial = parse_currency(pago_inicial_raw)
-        pago_semanal = parse_currency(pago_semanal_raw)
-    except ValueError as exc:
-        flash(str(exc), "danger")
-        return redirect(url_for("registros.nuevo"))
-
-    duracion_semanas = None
-    if duracion_raw:
-        try:
-            duracion_val = int(duracion_raw)
-        except ValueError:
-            flash("Duración en semanas inválida", "danger")
-            return redirect(url_for("registros.nuevo"))
-        if duracion_val < 1:
-            flash("La duración debe ser al menos de una semana", "danger")
-            return redirect(url_for("registros.nuevo"))
-        duracion_semanas = duracion_val
 
     if not cliente_unico:
         flash("Cliente único es obligatorio", "warning")
-        return redirect(url_for("registros.nuevo"))
-
-    if not tipo_convenio_id or not boca_cobranza_id:
-        flash("Selecciona un tipo de convenio y una boca de cobranza.", "danger")
         return redirect(url_for("registros.nuevo"))
 
     try:
@@ -544,11 +377,12 @@ def crear():
             flash("Cliente no existe en la base del día", "danger")
             return redirect(url_for("registros.nuevo"))
 
+        # archivos
         try:
             archivo_convenio = _save_upload(files.get("archivo_convenio"))
             archivo_pago = _save_upload(files.get("archivo_pago"))
             archivo_gestion = _save_upload(files.get("archivo_gestion"))
-        except Exception as exc:  # noqa: BLE001 - mostramos mensaje amigable
+        except Exception as exc:
             flash(f"Error en archivos: {exc}", "danger")
             return redirect(url_for("registros.nuevo"))
 
@@ -559,16 +393,6 @@ def crear():
             fecha_promesa=fecha_promesa or date.today(),
             telefono=telefono or None,
             semana=int(semana_raw) if semana_raw else None,
-            nombre_cte_snap=base.nombre_cte,
-            gerencia_snap=base.gerencia,
-            producto_snap=base.producto,
-            fidiapago_snap=base.fidiapago,
-            gestion_desc_snap=base.gestion_desc,
-            tipo_convenio_id=tipo_convenio_id_int,
-            boca_cobranza_id=boca_cobranza_id_int,
-            fecha_promesa=date.fromisoformat(fecha_promesa) if fecha_promesa else date.today(),
-            telefono=telefono or None,
-            semana=int(semana) if semana else None,
             pago_inicial=pago_inicial,
             pago_semanal=pago_semanal,
             duracion_semanas=duracion_semanas,
@@ -604,9 +428,6 @@ def actualizar(registro_id: int):
     fecha_promesa_raw = form.get("fecha_promesa")
     telefono = (form.get("telefono") or "").strip()
     semana_raw = form.get("semana")
-    fecha_promesa = form.get("fecha_promesa")
-    telefono = (form.get("telefono") or "").strip()
-    semana = form.get("semana")
     notas = (form.get("notas") or "").strip()
     pago_inicial_raw = (form.get("pago_inicial") or "").strip()
     pago_semanal_raw = (form.get("pago_semanal") or "").strip()
@@ -623,10 +444,6 @@ def actualizar(registro_id: int):
 
     if not cliente_unico:
         flash("Cliente único es obligatorio", "warning")
-        return redirect(url_for("registros.editar", registro_id=registro_id))
-
-    if not tipo_convenio_id or not boca_cobranza_id:
-        flash("Selecciona un tipo de convenio y una boca de cobranza.", "danger")
         return redirect(url_for("registros.editar", registro_id=registro_id))
 
     try:
@@ -648,16 +465,16 @@ def actualizar(registro_id: int):
             flash("Cliente no existe en la base del día", "danger")
             return redirect(url_for("registros.editar", registro_id=registro_id))
 
+        # archivos nuevos
         try:
             nuevo_convenio = _save_upload(files.get("archivo_convenio"))
             nuevo_pago = _save_upload(files.get("archivo_pago"))
             nueva_gestion = _save_upload(files.get("archivo_gestion"))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             flash(f"Error en archivos: {exc}", "danger")
-        except Exception as e:
-            flash(f"Error en archivos: {e}", "danger")
             return redirect(url_for("registros.editar", registro_id=registro_id))
 
+        # flags de borrado
         if form.get("eliminar_archivo_convenio") == "1":
             _delete_file(registro.archivo_convenio)
             registro.archivo_convenio = None
@@ -668,6 +485,7 @@ def actualizar(registro_id: int):
             _delete_file(registro.archivo_gestion)
             registro.archivo_gestion = None
 
+        # aplicar nuevos archivos
         if nuevo_convenio:
             _delete_file(registro.archivo_convenio)
             registro.archivo_convenio = nuevo_convenio
@@ -678,34 +496,13 @@ def actualizar(registro_id: int):
             _delete_file(registro.archivo_gestion)
             registro.archivo_gestion = nueva_gestion
 
+        # campos
         registro.cliente_unico = cliente_unico
         registro.tipo_convenio_id = tipo_convenio_id_int
         registro.boca_cobranza_id = boca_cobranza_id_int
         registro.fecha_promesa = fecha_promesa or registro.fecha_promesa
         registro.telefono = telefono or None
         registro.semana = int(semana_raw) if semana_raw else None
-        try:
-            tipo_convenio_id_int = int(tipo_convenio_id)
-            boca_cobranza_id_int = int(boca_cobranza_id)
-        except (TypeError, ValueError):
-            flash("Selecciona un tipo de convenio y una boca de cobranza válidos.", "danger")
-            return redirect(url_for("registros.editar", registro_id=registro_id))
-
-        registro.cliente_unico = cliente_unico
-        registro.nombre_cte_snap = base.nombre_cte
-        registro.gerencia_snap = base.gerencia
-        registro.producto_snap = base.producto
-        registro.fidiapago_snap = base.fidiapago
-        registro.gestion_desc_snap = base.gestion_desc
-        registro.tipo_convenio_id = tipo_convenio_id_int
-        registro.boca_cobranza_id = boca_cobranza_id_int
-        registro.fecha_promesa = (
-            date.fromisoformat(fecha_promesa)
-            if fecha_promesa
-            else registro.fecha_promesa
-        )
-        registro.telefono = telefono or None
-        registro.semana = int(semana) if semana else None
         registro.pago_inicial = pago_inicial
         registro.pago_semanal = pago_semanal
         registro.duracion_semanas = duracion_semanas
@@ -718,26 +515,24 @@ def actualizar(registro_id: int):
     return redirect(url_for("registros.listado"))
 
 
-@registros_bp.get("/file/<string:filename>")
-def get_file(filename: str):
-    """Sirve un archivo desde UPLOAD_FOLDER; requiere sesión activa."""
 # ----------------- Servir archivo (protegido) -----------------
 @registros_bp.get("/file/<string:fname>")
-def get_file(fname):
-    """Sirve un archivo desde UPLOAD_FOLDER; requiere sesión."""
+def get_file(fname: str):
+    """Sirve un archivo desde UPLOAD_FOLDER; requiere sesión activa."""
     if not session.get("user_id"):
         return redirect(url_for("auth.login"))
 
-    if "/" in filename or "\\" in filename:
+    if "/" in fname or "\\" in fname:
         abort(400)
 
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
-    full_path = os.path.join(upload_folder, filename)
-    if not os.path.isfile(full_path):
+    base = current_app.config["UPLOAD_FOLDER"]
+    full = os.path.join(base, fname)
+    if not os.path.isfile(full):
         abort(404)
-    return send_from_directory(upload_folder, filename, as_attachment=False)
+    return send_from_directory(base, fname, as_attachment=False)
 
 
+# ----------------- Resumen por semana (agente) -----------------
 @registros_bp.get("/resumen")
 def resumen():
     if not require_agent():
@@ -747,10 +542,17 @@ def resumen():
     user_id = session.get("user_id")
 
     with SessionLocal() as db:
-        query = db.query(Registro).filter(Registro.creado_por == user_id)
+        q = (
+            db.query(Registro)
+            .options(
+                selectinload(Registro.tipo_convenio),
+                selectinload(Registro.boca_cobranza),
+            )
+            .filter(Registro.creado_por == user_id)
+        )
         if semana:
-            query = query.filter(Registro.semana == semana)
-        registros = query.order_by(Registro.id.desc()).all()
+            q = q.filter(Registro.semana == semana)
+        registros = q.order_by(Registro.id.desc()).all()
 
     total = len(registros)
     total_pagos_inicial = Decimal("0")
@@ -758,34 +560,15 @@ def resumen():
     por_tipo: dict[str, int] = {}
     por_boca: dict[str, int] = {}
 
-    for registro in registros:
-        tipo = registro.tipo_convenio.nombre if registro.tipo_convenio else "(s/tipo)"
-        boca = registro.boca_cobranza.nombre if registro.boca_cobranza else "(s/boca)"
-        por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
-        por_boca[boca] = por_boca.get(boca, 0) + 1
-        if registro.pago_inicial:
-            total_pagos_inicial += registro.pago_inicial
-        if registro.pago_semanal:
-            total_pagos_semanal += registro.pago_semanal
-            q = q.filter(Registro.semana == semana)
-        registros = q.order_by(Registro.id.desc()).all()
-
-        # Totales simples
-        total = len(registros)
-        total_pagos_inicial = Decimal("0")
-        total_pagos_semanal = Decimal("0")
-        # por tipo / boca
-        por_tipo = {}
-        por_boca = {}
-        for r in registros:
-            t = r.tipo_convenio.nombre if r.tipo_convenio else "(s/tipo)"
-            b = r.boca_cobranza.nombre if r.boca_cobranza else "(s/boca)"
-            por_tipo[t] = por_tipo.get(t, 0) + 1
-            por_boca[b] = por_boca.get(b, 0) + 1
-            if r.pago_inicial:
-                total_pagos_inicial += r.pago_inicial
-            if r.pago_semanal:
-                total_pagos_semanal += r.pago_semanal
+    for r in registros:
+        t = r.tipo_convenio.nombre if r.tipo_convenio else "(s/tipo)"
+        b = r.boca_cobranza.nombre if r.boca_cobranza else "(s/boca)"
+        por_tipo[t] = por_tipo.get(t, 0) + 1
+        por_boca[b] = por_boca.get(b, 0) + 1
+        if r.pago_inicial:
+            total_pagos_inicial += r.pago_inicial
+        if r.pago_semanal:
+            total_pagos_semanal += r.pago_semanal
 
     return render_template(
         "registros_resumen.html",
