@@ -177,6 +177,12 @@ def nuevo():
         registro=None,
         is_edit=False,
         format_currency=_format_currency,
+    return render_template(
+        "registros_nuevo.html",
+        tipos=tipos,
+        bocas=bocas,
+        registro=None,
+        is_edit=False,
     )
 
 
@@ -215,6 +221,10 @@ def editar(registro_id: int):
         registro=registro,
         is_edit=True,
         format_currency=_format_currency,
+        tipos=tipos,
+        bocas=bocas,
+        registro=registro,
+        is_edit=True,
     )
 
 
@@ -323,6 +333,43 @@ def crear():
     except ValueError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("registros.nuevo"))
+    def parse_currency(value: str) -> Decimal | None:
+        if not value:
+            return None
+        cleaned = (
+            value.replace("MXN", "")
+            .replace("$", "")
+            .replace("\u00a0", " ")
+            .replace(" ", "")
+        )
+        if "," in cleaned and "." not in cleaned:
+            cleaned = cleaned.replace(",", ".")
+        cleaned = cleaned.replace(",", "")
+        if not cleaned:
+            return None
+        try:
+            return Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        except (InvalidOperation, ValueError):
+            raise ValueError("Formato de moneda inválido")
+
+    try:
+        pago_inicial = parse_currency(pago_inicial_raw)
+        pago_semanal = parse_currency(pago_semanal_raw)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("registros.nuevo"))
+
+    duracion_semanas = None
+    if duracion_raw:
+        try:
+            duracion_val = int(duracion_raw)
+        except ValueError:
+            flash("Duración en semanas inválida", "danger")
+            return redirect(url_for("registros.nuevo"))
+        if duracion_val < 1:
+            flash("La duración debe ser al menos de una semana", "danger")
+            return redirect(url_for("registros.nuevo"))
+        duracion_semanas = duracion_val
 
     if not cliente_unico:
         flash("Cliente único es obligatorio", "warning")
