@@ -96,6 +96,10 @@ button.ghost, .btn.ghost{
   background:transparent; color:var(--brand); border:1px solid var(--brand);
 }
 button.danger, .btn.danger{ background:var(--danger) }
+button.small, .btn.small{
+  padding:6px 10px;
+  font-size:12px;
+}
 
 /* Tablas */
 table{ width:100%; border-collapse:collapse; background:var(--card); }
@@ -127,6 +131,21 @@ tr:hover td{ background: rgba(37,99,235,.04) }
   border-radius:12px; background:rgba(148,163,184,.08);
 }
 .input-file input[type="file"]{ all:unset }
+.current-file{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:6px;
+}
+.checkbox-inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  color:var(--muted);
+  text-transform:none;
+  cursor:pointer;
+}
 
 /* Helpers */
 hr{ border:none; height:1px; background:var(--line); margin:14px 0 }

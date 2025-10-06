@@ -18,6 +18,7 @@
           <th>Pagos</th>
           <th>Archivos</th>
           <th>Creado</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -56,6 +57,14 @@
             {% endif %}
           </td>
           <td>{{ r.creado_en }}</td>
+          <td>
+            {% set can_edit = (role != 'agente') or (role == 'agente' and r.creado_por == user_id) %}
+            {% if can_edit %}
+              <a class="btn ghost small" href="{{ url_for('registros.editar', registro_id=r.id) }}">Editar</a>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
