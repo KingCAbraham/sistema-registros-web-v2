@@ -3,6 +3,7 @@ import os
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import Flask, session, redirect, url_for, flash
+from flask import Flask, render_template, session, redirect, url_for, flash
 from config import Config
 from db import ensure_latest_schema
 
