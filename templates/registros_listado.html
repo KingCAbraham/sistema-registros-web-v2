@@ -1,41 +1,74 @@
 
 {% extends "layout.html" %}
 {% block content %}
-<div class="card">
-  <h3>Mis Registros (últimos 100)</h3>
-  <table style="width:100%; border-collapse:collapse;">
-    <tr>
-      <th>ID</th>
-      <th>Cliente</th>
-      <th>Tipo</th>
-      <th>Boca</th>
-      <th>Fecha Promesa</th>
-      <th>Archivos</th>
-      <th>Creado</th>
-    </tr>
-    {% for r in registros %}
-    <tr>
-      <td>{{ r.id }}</td>
-      <td>{{ r.cliente_unico }} — {{ r.nombre_cte_snap }}</td>
-      <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '' }}</td>
-      <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '' }}</td>
-      <td>{{ r.fecha_promesa }}</td>
-      <td>
-        {% if r.archivo_convenio %}
-          <a href="{{ url_for('registros.get_file', fname=r.archivo_convenio) }}" target="_blank">Convenio</a>
-        {% endif %}
-        {% if r.archivo_pago %}
-          {% if r.archivo_convenio %} · {% endif %}
-          <a href="{{ url_for('registros.get_file', fname=r.archivo_pago) }}" target="_blank">Pago</a>
-        {% endif %}
-        {% if r.archivo_gestion %}
-          {% if r.archivo_convenio or r.archivo_pago %} · {% endif %}
-          <a href="{{ url_for('registros.get_file', fname=r.archivo_gestion) }}" target="_blank">Gestión</a>
-        {% endif %}
-      </td>
-      <td>{{ r.creado_en }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+<div class="card stack">
+  <div>
+    <h2>Mis registros</h2>
+    <p class="muted">Últimos 100 registros capturados.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Tipo</th>
+          <th>Boca</th>
+          <th>Fecha promesa</th>
+          <th>Pagos</th>
+          <th>Archivos</th>
+          <th>Creado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros %}
+        <tr>
+          <td>{{ r.id }}</td>
+          <td>
+            <strong>{{ r.cliente_unico }}</strong><br>
+            <span class="muted">{{ r.nombre_cte_snap }}</span>
+          </td>
+          <td>{{ r.tipo_convenio.nombre if r.tipo_convenio else '—' }}</td>
+          <td>{{ r.boca_cobranza.nombre if r.boca_cobranza else '—' }}</td>
+          <td>{{ r.fecha_promesa }}</td>
+          <td>
+            <div>{{ r.pago_inicial | currency_mx }}</div>
+            <div class="muted">Semanal: {{ r.pago_semanal | currency_mx }}</div>
+            <div class="muted">Duración: {% if r.duracion_semanas %}{{ r.duracion_semanas }} sem.{% else %}—{% endif %}</div>
+          </td>
+          <td>
+            {% set enlaces = [] %}
+            {% if r.archivo_convenio %}
+              {% set _ = enlaces.append(('Convenio', r.archivo_convenio)) %}
+            {% endif %}
+            {% if r.archivo_pago %}
+              {% set _ = enlaces.append(('Pago', r.archivo_pago)) %}
+            {% endif %}
+            {% if r.archivo_gestion %}
+              {% set _ = enlaces.append(('Gestión', r.archivo_gestion)) %}
+            {% endif %}
+            {% if enlaces %}
+              {% for label, fname in enlaces %}
+                <a href="{{ url_for('registros.get_file', fname=fname) }}" target="_blank">{{ label }}</a>{% if not loop.last %} · {% endif %}
+              {% endfor %}
+            {% else %}
+              <span class="muted">Sin archivos</span>
+            {% endif %}
+          </td>
+          <td>{{ r.creado_en }}</td>
+          <td>
+            {% set can_edit = (role != 'agente') or (role == 'agente' and r.creado_por == user_id) %}
+            {% if can_edit %}
+              <a class="btn ghost small" href="{{ url_for('registros.editar', registro_id=r.id) }}">Editar</a>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
