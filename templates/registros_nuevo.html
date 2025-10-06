@@ -9,6 +9,7 @@
         action="{{ url_for('registros.actualizar', registro_id=registro.id) if is_edit else url_for('registros.crear') }}"
         enctype="multipart/form-data"
         class="stack">
+  <form method="post" action="{{ url_for('registros.crear') }}" enctype="multipart/form-data" class="stack">
     <section class="stack">
       <div class="row">
         <div class="field">
@@ -20,6 +21,7 @@
                  placeholder="Buscar..."
                  value="{{ registro.cliente_unico if is_edit else '' }}"
                  required>
+          <input id="cliente_unico" name="cliente_unico" list="dl_cu" autocomplete="off" placeholder="Buscar..." required>
           <datalist id="dl_cu"></datalist>
           <p class="help">Escribe al menos dos caracteres para ver sugerencias.</p>
         </div>
@@ -34,6 +36,15 @@
         <div class="field">
           <label>Producto</label>
           <input id="producto" type="text" value="{{ registro.producto_snap if is_edit else '' }}" readonly>
+          <input id="nombre_cte" type="text" readonly>
+        </div>
+        <div class="field">
+          <label>Gerencia</label>
+          <input id="gerencia" type="text" readonly>
+        </div>
+        <div class="field">
+          <label>Producto</label>
+          <input id="producto" type="text" readonly>
         </div>
       </div>
 
@@ -41,12 +52,14 @@
         <div class="field">
           <label>FIDIAPAGO</label>
           <input id="fidiapago" type="text" value="{{ registro.fidiapago_snap if is_edit else '' }}" readonly>
+          <input id="fidiapago" type="text" readonly>
         </div>
       </div>
 
       <div class="field">
         <label>GESTION_DESC</label>
         <textarea id="gestion_desc" rows="5" readonly>{{ registro.gestion_desc_snap if is_edit else '' }}</textarea>
+        <textarea id="gestion_desc" rows="5" readonly></textarea>
       </div>
     </section>
 
@@ -59,6 +72,7 @@
           <select name="tipo_convenio_id" required>
             {% for t in tipos %}
             <option value="{{ t.id }}" {% if is_edit and registro.tipo_convenio_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+            <option value="{{ t.id }}">{{ t.nombre }}</option>
             {% endfor %}
           </select>
         </div>
@@ -67,6 +81,7 @@
           <select name="boca_cobranza_id" required>
             {% for b in bocas %}
             <option value="{{ b.id }}" {% if is_edit and registro.boca_cobranza_id == b.id %}selected{% endif %}>{{ b.nombre }}</option>
+            <option value="{{ b.id }}">{{ b.nombre }}</option>
             {% endfor %}
           </select>
         </div>
@@ -77,6 +92,11 @@
         <div class="field">
           <label>Teléfono</label>
           <input type="text" name="telefono" placeholder="10 dígitos" value="{{ registro.telefono if is_edit and registro.telefono else '' }}">
+          <input type="date" name="fecha_promesa">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="text" name="telefono" placeholder="10 dígitos">
         </div>
       </div>
 
@@ -89,6 +109,7 @@
                  data-currency
                  placeholder="$0.00"
                  value="{{ '$ {:,.2f}'.format(registro.pago_inicial) if is_edit and registro.pago_inicial is not none else '' }}">
+          <input type="text" name="pago_inicial" class="currency" data-currency placeholder="$0.00">
           <p class="help">Ingresa el monto acordado al momento de la promesa.</p>
         </div>
         <div class="field">
@@ -107,12 +128,22 @@
         <div class="field">
           <label>Semana (1-52)</label>
           <input type="number" name="semana" min="1" max="52" placeholder="Ej. 24" value="{{ registro.semana if is_edit and registro.semana else '' }}">
+          <input type="text" name="pago_semanal" class="currency" data-currency placeholder="$0.00">
+        </div>
+        <div class="field">
+          <label>Duración (semanas)</label>
+          <input type="number" name="duracion_semanas" min="1" max="120" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Semana (1-52)</label>
+          <input type="number" name="semana" min="1" max="52" placeholder="Ej. 24">
         </div>
       </div>
 
       <div class="field">
         <label>Notas</label>
         <textarea name="notas" rows="4" placeholder="Observaciones relevantes">{{ registro.notas if is_edit and registro.notas else '' }}</textarea>
+        <textarea name="notas" rows="4" placeholder="Observaciones relevantes"></textarea>
       </div>
     </section>
 
@@ -158,6 +189,7 @@
 
     <div class="actions">
       <button type="submit">{{ 'Actualizar' if is_edit else 'Guardar' }}</button>
+      <button type="submit">Guardar</button>
       <a class="btn secondary" href="{{ url_for('registros.listado') }}">Cancelar</a>
     </div>
   </form>
