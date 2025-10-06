@@ -2,6 +2,8 @@
 import os
 import uuid
 from datetime import date
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 from sqlalchemy.orm import selectinload
 
 from flask import (
@@ -9,7 +11,6 @@ from flask import (
     session, jsonify, current_app, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from sqlalchemy import func
 
 from db import SessionLocal
 from models import Registro, BaseGeneral, TipoConvenio, BocaCobranza
@@ -55,12 +56,57 @@ def _save_upload(file_storage):
     return unique
 
 
+def _delete_file(fname: str | None):
+    if not fname:
+        return
+    base = current_app.config["UPLOAD_FOLDER"]
+    path = os.path.join(base, fname)
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _parse_currency(value: str) -> Decimal | None:
+    if not value:
+        return None
+
+    cleaned = (
+        value.replace("MXN", "")
+        .replace("$", "")
+        .replace("\u00a0", " ")
+        .replace(" ", "")
+    )
+    if "," in cleaned and "." not in cleaned:
+        cleaned = cleaned.replace(",", ".")
+    cleaned = cleaned.replace(",", "")
+    if not cleaned:
+        return None
+    try:
+        return Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        raise ValueError("Formato de moneda inválido")
+
+
+def _parse_duration(raw: str) -> int | None:
+    if not raw:
+        return None
+    try:
+        duracion_val = int(raw)
+    except ValueError as exc:
+        raise ValueError("Duración en semanas inválida") from exc
+    if duracion_val < 1:
+        raise ValueError("La duración debe ser al menos de una semana")
+    return duracion_val
+
+
 # ----------------- Listado -----------------
 @registros_bp.get("/")
 def listado():
     if not require_agent():
         return redirect(url_for("auth.login"))
     user_id = session.get("user_id")
+    role = session.get("role")
     with SessionLocal() as db:
         q = (
             db.query(Registro)
@@ -72,7 +118,12 @@ def listado():
         if session.get("role") == "agente":
             q = q.filter(Registro.creado_por == user_id)
         regs = q.order_by(Registro.id.desc()).limit(100).all()
-    return render_template("registros_listado.html", registros=regs)
+    return render_template(
+        "registros_listado.html",
+        registros=regs,
+        role=role,
+        user_id=user_id,
+    )
 # ----------------- Nuevo registro (form) -----------------
 @registros_bp.get("/nuevo")
 def nuevo():
@@ -91,7 +142,50 @@ def nuevo():
             .order_by(BocaCobranza.nombre.asc())
             .all()
         )
-    return render_template("registros_nuevo.html", tipos=tipos, bocas=bocas)
+    return render_template(
+        "registros_nuevo.html",
+        tipos=tipos,
+        bocas=bocas,
+        registro=None,
+        is_edit=False,
+    )
+
+
+@registros_bp.get("/<int:registro_id>/editar")
+def editar(registro_id: int):
+    if not require_agent():
+        return redirect(url_for("auth.login"))
+
+    user_id = session.get("user_id")
+    role = session.get("role")
+
+    with SessionLocal() as db:
+        registro = db.query(Registro).filter(Registro.id == registro_id).first()
+        if not registro:
+            abort(404)
+        if role == "agente" and registro.creado_por != user_id:
+            abort(403)
+
+        tipos = (
+            db.query(TipoConvenio)
+            .filter(TipoConvenio.activo == 1)
+            .order_by(TipoConvenio.nombre.asc())
+            .all()
+        )
+        bocas = (
+            db.query(BocaCobranza)
+            .filter(BocaCobranza.activo == 1)
+            .order_by(BocaCobranza.nombre.asc())
+            .all()
+        )
+
+    return render_template(
+        "registros_nuevo.html",
+        tipos=tipos,
+        bocas=bocas,
+        registro=registro,
+        is_edit=True,
+    )
 
 
 # ----------------- API: Autocomplete por cliente_unico -----------------
@@ -188,9 +282,31 @@ def crear():
     telefono = (form.get("telefono") or "").strip()
     semana = form.get("semana")
     notas = (form.get("notas") or "").strip()
+    pago_inicial_raw = (form.get("pago_inicial") or "").strip()
+    pago_semanal_raw = (form.get("pago_semanal") or "").strip()
+    duracion_raw = (form.get("duracion_semanas") or "").strip()
+
+    try:
+        pago_inicial = _parse_currency(pago_inicial_raw)
+        pago_semanal = _parse_currency(pago_semanal_raw)
+        duracion_semanas = _parse_duration(duracion_raw)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("registros.nuevo"))
 
     if not cliente_unico:
         flash("Cliente único es obligatorio", "warning")
+        return redirect(url_for("registros.nuevo"))
+
+    if not tipo_convenio_id or not boca_cobranza_id:
+        flash("Selecciona un tipo de convenio y una boca de cobranza.", "danger")
+        return redirect(url_for("registros.nuevo"))
+
+    try:
+        tipo_convenio_id_int = int(tipo_convenio_id)
+        boca_cobranza_id_int = int(boca_cobranza_id)
+    except (TypeError, ValueError):
+        flash("Selecciona un tipo de convenio y una boca de cobranza válidos.", "danger")
         return redirect(url_for("registros.nuevo"))
 
     with SessionLocal() as db:
@@ -215,11 +331,14 @@ def crear():
             producto_snap=base.producto,
             fidiapago_snap=base.fidiapago,
             gestion_desc_snap=base.gestion_desc,
-            tipo_convenio_id=int(tipo_convenio_id),
-            boca_cobranza_id=int(boca_cobranza_id),
+            tipo_convenio_id=tipo_convenio_id_int,
+            boca_cobranza_id=boca_cobranza_id_int,
             fecha_promesa=date.fromisoformat(fecha_promesa) if fecha_promesa else date.today(),
             telefono=telefono or None,
             semana=int(semana) if semana else None,
+            pago_inicial=pago_inicial,
+            pago_semanal=pago_semanal,
+            duracion_semanas=duracion_semanas,
             notas=notas or None,
             creado_por=user_id,
 
@@ -232,6 +351,117 @@ def crear():
         db.commit()
 
     flash("Registro creado", "success")
+    return redirect(url_for("registros.listado"))
+
+
+@registros_bp.post("/<int:registro_id>/actualizar")
+def actualizar(registro_id: int):
+    if not require_agent():
+        return redirect(url_for("auth.login"))
+
+    user_id = session.get("user_id")
+    role = session.get("role")
+
+    form = request.form
+    files = request.files
+
+    cliente_unico = (form.get("cliente_unico") or "").strip()
+    tipo_convenio_id = form.get("tipo_convenio_id")
+    boca_cobranza_id = form.get("boca_cobranza_id")
+    fecha_promesa = form.get("fecha_promesa")
+    telefono = (form.get("telefono") or "").strip()
+    semana = form.get("semana")
+    notas = (form.get("notas") or "").strip()
+    pago_inicial_raw = (form.get("pago_inicial") or "").strip()
+    pago_semanal_raw = (form.get("pago_semanal") or "").strip()
+    duracion_raw = (form.get("duracion_semanas") or "").strip()
+
+    try:
+        pago_inicial = _parse_currency(pago_inicial_raw)
+        pago_semanal = _parse_currency(pago_semanal_raw)
+        duracion_semanas = _parse_duration(duracion_raw)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("registros.editar", registro_id=registro_id))
+
+    if not cliente_unico:
+        flash("Cliente único es obligatorio", "warning")
+        return redirect(url_for("registros.editar", registro_id=registro_id))
+
+    if not tipo_convenio_id or not boca_cobranza_id:
+        flash("Selecciona un tipo de convenio y una boca de cobranza.", "danger")
+        return redirect(url_for("registros.editar", registro_id=registro_id))
+
+    with SessionLocal() as db:
+        registro = db.query(Registro).filter(Registro.id == registro_id).first()
+        if not registro:
+            abort(404)
+        if role == "agente" and registro.creado_por != user_id:
+            abort(403)
+
+        base = db.query(BaseGeneral).filter(BaseGeneral.cliente_unico == cliente_unico).first()
+        if not base:
+            flash("Cliente no existe en la base del día", "danger")
+            return redirect(url_for("registros.editar", registro_id=registro_id))
+
+        try:
+            nuevo_convenio = _save_upload(files.get("archivo_convenio"))
+            nuevo_pago = _save_upload(files.get("archivo_pago"))
+            nueva_gestion = _save_upload(files.get("archivo_gestion"))
+        except Exception as e:
+            flash(f"Error en archivos: {e}", "danger")
+            return redirect(url_for("registros.editar", registro_id=registro_id))
+
+        if form.get("eliminar_archivo_convenio") == "1":
+            _delete_file(registro.archivo_convenio)
+            registro.archivo_convenio = None
+        if form.get("eliminar_archivo_pago") == "1":
+            _delete_file(registro.archivo_pago)
+            registro.archivo_pago = None
+        if form.get("eliminar_archivo_gestion") == "1":
+            _delete_file(registro.archivo_gestion)
+            registro.archivo_gestion = None
+
+        if nuevo_convenio:
+            _delete_file(registro.archivo_convenio)
+            registro.archivo_convenio = nuevo_convenio
+        if nuevo_pago:
+            _delete_file(registro.archivo_pago)
+            registro.archivo_pago = nuevo_pago
+        if nueva_gestion:
+            _delete_file(registro.archivo_gestion)
+            registro.archivo_gestion = nueva_gestion
+
+        try:
+            tipo_convenio_id_int = int(tipo_convenio_id)
+            boca_cobranza_id_int = int(boca_cobranza_id)
+        except (TypeError, ValueError):
+            flash("Selecciona un tipo de convenio y una boca de cobranza válidos.", "danger")
+            return redirect(url_for("registros.editar", registro_id=registro_id))
+
+        registro.cliente_unico = cliente_unico
+        registro.nombre_cte_snap = base.nombre_cte
+        registro.gerencia_snap = base.gerencia
+        registro.producto_snap = base.producto
+        registro.fidiapago_snap = base.fidiapago
+        registro.gestion_desc_snap = base.gestion_desc
+        registro.tipo_convenio_id = tipo_convenio_id_int
+        registro.boca_cobranza_id = boca_cobranza_id_int
+        registro.fecha_promesa = (
+            date.fromisoformat(fecha_promesa)
+            if fecha_promesa
+            else registro.fecha_promesa
+        )
+        registro.telefono = telefono or None
+        registro.semana = int(semana) if semana else None
+        registro.pago_inicial = pago_inicial
+        registro.pago_semanal = pago_semanal
+        registro.duracion_semanas = duracion_semanas
+        registro.notas = notas or None
+
+        db.commit()
+
+    flash("Registro actualizado", "success")
     return redirect(url_for("registros.listado"))
 
 
@@ -267,6 +497,8 @@ def resumen():
 
         # Totales simples
         total = len(registros)
+        total_pagos_inicial = Decimal("0")
+        total_pagos_semanal = Decimal("0")
         # por tipo / boca
         por_tipo = {}
         por_boca = {}
@@ -275,6 +507,10 @@ def resumen():
             b = r.boca_cobranza.nombre if r.boca_cobranza else "(s/boca)"
             por_tipo[t] = por_tipo.get(t, 0) + 1
             por_boca[b] = por_boca.get(b, 0) + 1
+            if r.pago_inicial:
+                total_pagos_inicial += r.pago_inicial
+            if r.pago_semanal:
+                total_pagos_semanal += r.pago_semanal
 
     return render_template(
         "registros_resumen.html",
@@ -283,4 +519,8 @@ def resumen():
         total=total,
         por_tipo=por_tipo,
         por_boca=por_boca,
+        total_pagos_inicial=total_pagos_inicial,
+        total_pagos_semanal=total_pagos_semanal,
+        role=session.get("role"),
+        user_id=user_id,
     )

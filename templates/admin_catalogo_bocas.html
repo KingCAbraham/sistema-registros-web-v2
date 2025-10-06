@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card stack">
+  <h2>Bocas de cobranza</h2>
+  <form method="post" action="{{ url_for('admin.catalogo_bocas') }}" class="stack max-520">
+    <div class="row">
+      <div class="field">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" name="nombre" required>
+      </div>
+      <div class="field">
+        <label for="activo">Activo</label>
+        <input id="activo" type="checkbox" name="activo" checked>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="submit">Guardar</button>
+    </div>
+  </form>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Nombre</th><th>Activo</th></tr>
+      </thead>
+      <tbody>
+        {% for b in bocas %}
+          <tr>
+            <td>{{ b.id }}</td>
+            <td>{{ b.nombre }}</td>
+            <td>{{ 'Sí' if b.activo else 'No' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="table-empty">Sin registros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
