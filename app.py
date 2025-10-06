@@ -1,7 +1,10 @@
 # app.py
 import os
-from flask import Flask, render_template, session, redirect, url_for, flash
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+from flask import Flask, session, redirect, url_for, flash
 from config import Config
+from db import ensure_latest_schema
 
 # Blueprints (cada uno define su propio url_prefix en su __init__.py)
 from blueprints.auth import auth_bp
@@ -16,6 +19,9 @@ def create_app() -> Flask:
     # Asegura la carpeta de uploads (coincide con Config.UPLOAD_FOLDER)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
+    # ---- Migraciones mínimas ----
+    ensure_latest_schema()
+
     # ---- Blueprints ----
     app.register_blueprint(auth_bp)       # /auth
     app.register_blueprint(registros_bp)  # /registros
@@ -29,13 +35,25 @@ def create_app() -> Flask:
             "current_role": session.get("role"),
         }
 
+    @app.template_filter("currency_mx")
+    def currency_mx(value):
+        if value in (None, ""):
+            return "—"
+        try:
+            amount = Decimal(value)
+        except (InvalidOperation, TypeError, ValueError):
+            return str(value)
+        quantized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        formatted = f"{quantized:,.2f}"
+        return f"$ {formatted}"
+
     # ---- Rutas raíz / utilidades ----
     @app.route("/")
     def home():
         """Si no hay sesión => login. Si hay sesión => dashboard."""
         if not session.get("user_id"):
             return redirect(url_for("auth.login"))
-        return render_template("dashboard.html")
+        return redirect(url_for("registros.listado"))
 
     # Opcional: pequeña ruta de salud para pruebas de despliegue
     @app.route("/healthz")
