@@ -1,5 +1,7 @@
 # app.py
 import os
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 from flask import Flask, render_template, session, redirect, url_for, flash
 from config import Config
 
@@ -28,6 +30,18 @@ def create_app() -> Flask:
             "current_username": session.get("username"),
             "current_role": session.get("role"),
         }
+
+    @app.template_filter("currency_mx")
+    def currency_mx(value):
+        if value in (None, ""):
+            return "—"
+        try:
+            amount = Decimal(value)
+        except (InvalidOperation, TypeError, ValueError):
+            return str(value)
+        quantized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        formatted = f"{quantized:,.2f}"
+        return f"$ {formatted}"
 
     # ---- Rutas raíz / utilidades ----
     @app.route("/")

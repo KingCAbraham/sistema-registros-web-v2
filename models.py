@@ -1,6 +1,9 @@
 from datetime import datetime, date
-from sqlalchemy import Integer, String, Date, DateTime, Text, ForeignKey
+from decimal import Decimal
+
+from sqlalchemy import Integer, String, Date, DateTime, Text, ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from db import Base
 
 # --- Usuarios ---
@@ -58,6 +61,9 @@ class Registro(Base):
 
     telefono: Mapped[str | None] = mapped_column(String(30), nullable=True)
     semana:   Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pago_inicial: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    pago_semanal: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    duracion_semanas: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notas:    Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # evidencias (opcionales)
