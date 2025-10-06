@@ -48,6 +48,52 @@
         <div class="field wide">
           <label for="gestion_desc">GESTION_DESC</label>
           <textarea id="gestion_desc" rows="4" readonly>{{ registro.gestion_desc_snap if is_edit else '' }}</textarea>
+        </div>
+      </div>
+    </fieldset>
+
+
+  <form method="post"
+        action="{{ url_for('registros.actualizar', registro_id=registro.id) if is_edit else url_for('registros.crear') }}"
+        enctype="multipart/form-data"
+        class="stack">
+    <fieldset class="stack">
+      <legend>Datos del cliente</legend>
+      <div class="row">
+        <div class="field">
+          <label for="cliente_unico">Cliente único</label>
+          <input id="cliente_unico"
+                 name="cliente_unico"
+                 list="dl_cu"
+                 autocomplete="off"
+                 placeholder="Buscar..."
+                 value="{{ registro.cliente_unico if is_edit else '' }}"
+                 required>
+          <datalist id="dl_cu"></datalist>
+          <p class="help">Escribe al menos dos caracteres para ver sugerencias.</p>
+        </div>
+        <div class="field">
+          <label for="nombre_cte">Nombre</label>
+          <input id="nombre_cte" type="text" value="{{ registro.nombre_cte_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field">
+          <label for="gerencia">Gerencia</label>
+          <input id="gerencia" type="text" value="{{ registro.gerencia_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field">
+          <label for="producto">Producto</label>
+          <input id="producto" type="text" value="{{ registro.producto_snap if is_edit else '' }}" readonly>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="fidiapago">FIDIAPAGO</label>
+          <input id="fidiapago" type="text" value="{{ registro.fidiapago_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field wide">
+          <label for="gestion_desc">GESTION_DESC</label>
+          <textarea id="gestion_desc" rows="4" readonly>{{ registro.gestion_desc_snap if is_edit else '' }}</textarea>
 
 <div class="card">
   <h2>{{ 'Editar registro' if is_edit else 'Nuevo registro' }}</h2>
@@ -300,6 +346,42 @@
       <div class="row tight">
         <div class="field">
           <label for="archivo_convenio">Convenio (PDF/imagen)</label>
+          {% if is_edit and registro.archivo_convenio %}
+          <div class="current-file">
+            <a href="{{ url_for('registros.get_file', fname=registro.archivo_convenio) }}" target="_blank">Ver archivo actual</a>
+            <label class="checkbox-inline"><input type="checkbox" name="eliminar_archivo_convenio" value="1"> Eliminar</label>
+          </div>
+          <p class="help">Sube un archivo nuevo para reemplazar o marca eliminar.</p>
+          {% endif %}
+          <input id="archivo_convenio" type="file" name="archivo_convenio" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+        <div class="field">
+          <label for="archivo_pago">Ticket/Pago (PDF/imagen)</label>
+          {% if is_edit and registro.archivo_pago %}
+          <div class="current-file">
+            <a href="{{ url_for('registros.get_file', fname=registro.archivo_pago) }}" target="_blank">Ver archivo actual</a>
+            <label class="checkbox-inline"><input type="checkbox" name="eliminar_archivo_pago" value="1"> Eliminar</label>
+          </div>
+          <p class="help">Sube un archivo nuevo para reemplazar o marca eliminar.</p>
+          {% endif %}
+          <input id="archivo_pago" type="file" name="archivo_pago" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+        <div class="field">
+          <label for="archivo_gestion">Evidencia de gestión (PDF/imagen)</label>
+          {% if is_edit and registro.archivo_gestion %}
+          <div class="current-file">
+            <a href="{{ url_for('registros.get_file', fname=registro.archivo_gestion) }}" target="_blank">Ver archivo actual</a>
+            <label class="checkbox-inline"><input type="checkbox" name="eliminar_archivo_gestion" value="1"> Eliminar</label>
+          </div>
+          <p class="help">Sube un archivo nuevo para reemplazar o marca eliminar.</p>
+          {% endif %}
+          <input id="archivo_gestion" type="file" name="archivo_gestion" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit">{{ 'Actualizar' if is_edit else 'Guardar' }}</button>
       <legend>Evidencias</legend>
       <div class="row tight">
         <div class="field">
