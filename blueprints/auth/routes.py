@@ -29,7 +29,13 @@ def login_post():
     session["role"] = user.role
 
     flash(f"Bienvenido, {user.username}", "success")
-    return redirect(url_for("home"))
+
+    if user.role == "admin":
+        destino = "admin.index"
+    else:
+        destino = "registros.listado"
+
+    return redirect(url_for(destino))
 
 @auth_bp.get("/logout")
 def logout():

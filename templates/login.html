@@ -1,17 +1,18 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card" style="max-width:420px;">
-  <h3>Login</h3>
-  <form method="post">
-    <div style="margin:10px 0;">
-      <label>Usuario</label><br />
-      <input type="text" name="username" required />
+<div class="card centered">
+  <h2>Bienvenido</h2>
+  <p class="muted">Accede con tus credenciales para continuar.</p>
+  <form method="post" class="stack">
+    <div class="field">
+      <label>Usuario</label>
+      <input type="text" name="username" autocomplete="username" required />
     </div>
-    <div style="margin:10px 0;">
-      <label>Contraseña</label><br />
-      <input type="password" name="password" required />
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" name="password" autocomplete="current-password" required />
     </div>
-    <button type="submit">Entrar</button>
+    <button type="submit">Iniciar sesión</button>
   </form>
 </div>
 {% endblock %}
