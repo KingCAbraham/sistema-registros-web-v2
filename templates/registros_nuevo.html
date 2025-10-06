@@ -7,6 +7,10 @@
     <p class="muted">Captura o corrige la información del convenio en un solo lugar.</p>
   </div>
 
+<div class="card">
+  <h2>{{ 'Editar registro' if is_edit else 'Nuevo registro' }}</h2>
+
+  <!-- IMPORTANTÍSIMO: enctype para poder enviar archivos -->
   <form method="post"
         action="{{ url_for('registros.actualizar', registro_id=registro.id) if is_edit else url_for('registros.crear') }}"
         enctype="multipart/form-data"
@@ -16,6 +20,11 @@
       <div class="row">
         <div class="field">
           <label for="cliente_unico">Cliente único</label>
+  <form method="post" action="{{ url_for('registros.crear') }}" enctype="multipart/form-data" class="stack">
+    <section class="stack">
+      <div class="row">
+        <div class="field">
+          <label>Cliente único</label>
           <input id="cliente_unico"
                  name="cliente_unico"
                  list="dl_cu"
@@ -23,6 +32,7 @@
                  placeholder="Buscar..."
                  value="{{ registro.cliente_unico if is_edit else '' }}"
                  required>
+          <input id="cliente_unico" name="cliente_unico" list="dl_cu" autocomplete="off" placeholder="Buscar..." required>
           <datalist id="dl_cu"></datalist>
           <p class="help">Escribe al menos dos caracteres para ver sugerencias.</p>
         </div>
@@ -37,6 +47,25 @@
         <div class="field">
           <label for="producto">Producto</label>
           <input id="producto" type="text" value="{{ registro.producto_snap if is_edit else '' }}" readonly>
+          <label>Nombre</label>
+          <input id="nombre_cte" type="text" value="{{ registro.nombre_cte_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field">
+          <label>Gerencia</label>
+          <input id="gerencia" type="text" value="{{ registro.gerencia_snap if is_edit else '' }}" readonly>
+        </div>
+        <div class="field">
+          <label>Producto</label>
+          <input id="producto" type="text" value="{{ registro.producto_snap if is_edit else '' }}" readonly>
+          <input id="nombre_cte" type="text" readonly>
+        </div>
+        <div class="field">
+          <label>Gerencia</label>
+          <input id="gerencia" type="text" readonly>
+        </div>
+        <div class="field">
+          <label>Producto</label>
+          <input id="producto" type="text" readonly>
         </div>
       </div>
 
@@ -61,6 +90,29 @@
             <option value="" disabled {% if (not is_edit) or (is_edit and not registro.tipo_convenio_id) %}selected{% endif %}>Selecciona una opción</option>
             {% for t in tipos %}
             <option value="{{ t.id }}" {% if is_edit and registro.tipo_convenio_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+          <label>FIDIAPAGO</label>
+          <input id="fidiapago" type="text" value="{{ registro.fidiapago_snap if is_edit else '' }}" readonly>
+          <input id="fidiapago" type="text" readonly>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>GESTION_DESC</label>
+        <textarea id="gestion_desc" rows="5" readonly>{{ registro.gestion_desc_snap if is_edit else '' }}</textarea>
+        <textarea id="gestion_desc" rows="5" readonly></textarea>
+      </div>
+    </section>
+
+    <hr>
+
+    <section class="stack">
+      <div class="row">
+        <div class="field">
+          <label>Tipo de convenio</label>
+          <select name="tipo_convenio_id" required>
+            {% for t in tipos %}
+            <option value="{{ t.id }}" {% if is_edit and registro.tipo_convenio_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+            <option value="{{ t.id }}">{{ t.nombre }}</option>
             {% endfor %}
           </select>
         </div>
@@ -70,6 +122,11 @@
             <option value="" disabled {% if (not is_edit) or (is_edit and not registro.boca_cobranza_id) %}selected{% endif %}>Selecciona una opción</option>
             {% for b in bocas %}
             <option value="{{ b.id }}" {% if is_edit and registro.boca_cobranza_id == b.id %}selected{% endif %}>{{ b.nombre }}</option>
+          <label>Boca de cobranza</label>
+          <select name="boca_cobranza_id" required>
+            {% for b in bocas %}
+            <option value="{{ b.id }}" {% if is_edit and registro.boca_cobranza_id == b.id %}selected{% endif %}>{{ b.nombre }}</option>
+            <option value="{{ b.id }}">{{ b.nombre }}</option>
             {% endfor %}
           </select>
         </div>
@@ -134,6 +191,73 @@
       <div class="row tight">
         <div class="field">
           <label for="archivo_convenio">Convenio (PDF/imagen)</label>
+          <label>Fecha promesa</label>
+          <input type="date" name="fecha_promesa" value="{{ registro.fecha_promesa.isoformat() if is_edit and registro.fecha_promesa else '' }}">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="text" name="telefono" placeholder="10 dígitos" value="{{ registro.telefono if is_edit and registro.telefono else '' }}">
+          <input type="date" name="fecha_promesa">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="text" name="telefono" placeholder="10 dígitos">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Pago inicial</label>
+          <input type="text"
+                 name="pago_inicial"
+                 class="currency"
+                 data-currency
+                 placeholder="$0.00"
+                 value="{{ '$ {:,.2f}'.format(registro.pago_inicial) if is_edit and registro.pago_inicial is not none else '' }}">
+          <input type="text" name="pago_inicial" class="currency" data-currency placeholder="$0.00">
+          <p class="help">Ingresa el monto acordado al momento de la promesa.</p>
+        </div>
+        <div class="field">
+          <label>Pago semanal</label>
+          <input type="text"
+                 name="pago_semanal"
+                 class="currency"
+                 data-currency
+                 placeholder="$0.00"
+                 value="{{ '$ {:,.2f}'.format(registro.pago_semanal) if is_edit and registro.pago_semanal is not none else '' }}">
+        </div>
+        <div class="field">
+          <label>Duración (semanas)</label>
+          <input type="number" name="duracion_semanas" min="1" max="120" placeholder="0" value="{{ registro.duracion_semanas if is_edit and registro.duracion_semanas else '' }}">
+        </div>
+        <div class="field">
+          <label>Semana (1-52)</label>
+          <input type="number" name="semana" min="1" max="52" placeholder="Ej. 24" value="{{ registro.semana if is_edit and registro.semana else '' }}">
+          <input type="text" name="pago_semanal" class="currency" data-currency placeholder="$0.00">
+        </div>
+        <div class="field">
+          <label>Duración (semanas)</label>
+          <input type="number" name="duracion_semanas" min="1" max="120" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Semana (1-52)</label>
+          <input type="number" name="semana" min="1" max="52" placeholder="Ej. 24">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Notas</label>
+        <textarea name="notas" rows="4" placeholder="Observaciones relevantes">{{ registro.notas if is_edit and registro.notas else '' }}</textarea>
+        <textarea name="notas" rows="4" placeholder="Observaciones relevantes"></textarea>
+      </div>
+    </section>
+
+    <!-- ===== Evidencias (PDF/JPG/PNG) ===== -->
+    <section class="stack">
+      <hr>
+      <div class="row tight">
+        <div class="field">
+          <label>Convenio (PDF/imagen)</label>
           {% if is_edit and registro.archivo_convenio %}
           <div class="current-file">
             <a href="{{ url_for('registros.get_file', fname=registro.archivo_convenio) }}" target="_blank">Ver archivo actual</a>
@@ -145,6 +269,10 @@
         </div>
         <div class="field">
           <label for="archivo_pago">Ticket/Pago (PDF/imagen)</label>
+          <input type="file" name="archivo_convenio" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+        <div class="field">
+          <label>Ticket/Pago (PDF/imagen)</label>
           {% if is_edit and registro.archivo_pago %}
           <div class="current-file">
             <a href="{{ url_for('registros.get_file', fname=registro.archivo_pago) }}" target="_blank">Ver archivo actual</a>
@@ -156,6 +284,10 @@
         </div>
         <div class="field">
           <label for="archivo_gestion">Evidencia de gestión (PDF/imagen)</label>
+          <input type="file" name="archivo_pago" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+        <div class="field">
+          <label>Evidencia de gestión (PDF/imagen)</label>
           {% if is_edit and registro.archivo_gestion %}
           <div class="current-file">
             <a href="{{ url_for('registros.get_file', fname=registro.archivo_gestion) }}" target="_blank">Ver archivo actual</a>
@@ -170,6 +302,14 @@
 
     <div class="actions">
       <button type="submit">{{ 'Actualizar' if is_edit else 'Guardar' }}</button>
+          <input type="file" name="archivo_gestion" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button type="submit">{{ 'Actualizar' if is_edit else 'Guardar' }}</button>
+      <button type="submit">Guardar</button>
       <a class="btn secondary" href="{{ url_for('registros.listado') }}">Cancelar</a>
     </div>
   </form>
