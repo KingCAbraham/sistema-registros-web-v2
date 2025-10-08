@@ -1,5 +1,6 @@
 import os
-from sqlalchemy import create_engine
+
+BASE_DIR = os.path.dirname(__file__)
 
 def _build_mysql_uri():
     host = os.getenv("DB_HOST")
@@ -11,29 +12,39 @@ def _build_mysql_uri():
     if not (host and user and pwd):
         return None
 
+    # PyMySQL + utf8mb4
     return f"mysql+pymysql://{user}:{pwd}@{host}:{port}/{db}?charset=utf8mb4"
 
 def _db_url():
-    # Permite usar DATABASE_URL si lo expone la plataforma (p. ej., Postgres en Render)
-    return os.getenv("SQLALCHEMY_DATABASE_URI") or os.getenv("DATABASE_URL") or _build_mysql_uri()
-
-class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
-    SQLALCHEMY_DATABASE_URI = _db_url()
-
-# --- crear engine con SSL en Linux (Render) ---
-DB_URL = Config.SQLALCHEMY_DATABASE_URI
-if not DB_URL:
-    raise RuntimeError(
-        "Faltan variables para construir la URL de la base de datos "
-        "(define DB_HOST, DB_USER, DB_PASSWORD, etc. en el entorno)."
+    """
+    Prioridad:
+    1) SQLALCHEMY_DATABASE_URI (si la defines directa)
+    2) DATABASE_URL (p. ej. Postgres de Render)
+    3) Construida desde DB_HOST/DB_USER/DB_PASSWORD/...
+    """
+    return (
+        os.getenv("SQLALCHEMY_DATABASE_URI")
+        or os.getenv("DATABASE_URL")
+        or _build_mysql_uri()
     )
 
-# Usa el CA del sistema en Render/Linux
-CA_PATH = os.getenv("DB_SSL_CA", "/etc/ssl/certs/ca-certificates.crt")
+class Config:
+    # --- Flask ---
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
 
-engine = create_engine(
-    DB_URL,
-    pool_pre_ping=True,
-    connect_args={"ssl": {"ca": CA_PATH}},
-)
+    # --- SQLAlchemy ---
+    SQLALCHEMY_DATABASE_URI = _db_url()
+
+    # --- Uploads ---
+    # Si existe UPLOAD_FOLDER en el entorno (p. ej. /var/tmp/uploads en Render), se usa.
+    # Si no, cae a static/uploads dentro del proyecto.
+    UPLOAD_FOLDER = os.getenv(
+        "UPLOAD_FOLDER",
+        os.path.join(BASE_DIR, "static", "uploads"),
+    )
+
+    # 25 MB
+    MAX_CONTENT_LENGTH = 25 * 1024 * 1024
+
+    # Extensiones permitidas (ajústalas si necesitas otras)
+    ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
