@@ -1,36 +1,39 @@
 import os
-from dotenv import load_dotenv
-load_dotenv()
+from sqlalchemy import create_engine
 
-def _build_uri():
+def _build_mysql_uri():
     host = os.getenv("DB_HOST")
     port = os.getenv("DB_PORT", "4000")
     user = os.getenv("DB_USER")
     pwd  = os.getenv("DB_PASSWORD")
     db   = os.getenv("DB_NAME", "sistema_registros")
-    ca   = os.getenv("DB_SSL_CA", "")
 
     if not (host and user and pwd):
         return None
 
-    ca_param = ""
-    if ca:
-        # escapar backslashes en Windows para URL
-        ca_norm = ca.replace("\\", "\\\\")
-        ca_param = (
-            f"&ssl_ca={ca_norm}"
-            f"&ssl_verify_cert=true&ssl_verify_identity=true"
-        )
+    return f"mysql+pymysql://{user}:{pwd}@{host}:{port}/{db}?charset=utf8mb4"
 
-    return f"mysql+pymysql://{user}:{pwd}@{host}:{port}/{db}?charset=utf8mb4{ca_param}"
+def _db_url():
+    # Permite usar DATABASE_URL si lo expone la plataforma (p. ej., Postgres en Render)
+    return os.getenv("SQLALCHEMY_DATABASE_URI") or os.getenv("DATABASE_URL") or _build_mysql_uri()
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
-    SQLALCHEMY_DATABASE_URI = _build_uri()
+    SQLALCHEMY_DATABASE_URI = _db_url()
 
-    # --- uploads ---
-    # 25 MB reales (y el comentario coincide)
-    MAX_CONTENT_LENGTH = 25 * 1024 * 1024
-    # Guardar dentro de static/uploads para servir con url_for('static', filename=...)
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
-    ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
+# --- crear engine con SSL en Linux (Render) ---
+DB_URL = Config.SQLALCHEMY_DATABASE_URI
+if not DB_URL:
+    raise RuntimeError(
+        "Faltan variables para construir la URL de la base de datos "
+        "(define DB_HOST, DB_USER, DB_PASSWORD, etc. en el entorno)."
+    )
+
+# Usa el CA del sistema en Render/Linux
+CA_PATH = os.getenv("DB_SSL_CA", "/etc/ssl/certs/ca-certificates.crt")
+
+engine = create_engine(
+    DB_URL,
+    pool_pre_ping=True,
+    connect_args={"ssl": {"ca": CA_PATH}},
+)
