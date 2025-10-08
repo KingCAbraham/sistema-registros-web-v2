@@ -1,17 +1,29 @@
 # db.py
+import os
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from config import Config
 
+# ----- TLS / CA -----
+# En Render (Linux) existe el bundle del sistema:
+DEFAULT_CA = "/etc/ssl/certs/ca-certificates.crt"
+CA_PATH = os.getenv("DB_SSL_CA", DEFAULT_CA)
+
+# ----- Engine (MySQL/TiDB) -----
+# Nota: TiDB Serverless requiere TLS. Por eso pasamos connect_args["ssl"].
+# Ajusta el pool si necesitas menos conexiones simultáneas.
 engine = create_engine(
     Config.SQLALCHEMY_DATABASE_URI,
-    pool_pre_ping=True,
-    pool_recycle=280,
-    pool_size=5,
-    max_overflow=10,
-    future=True,
+    pool_pre_ping=True,          # verifica conexiones antes de usarlas
+    pool_recycle=280,            # recicla antes de que el server cierre por inactividad
+    pool_size=3,                 # pools pequeños para serverless
+    max_overflow=2,              # picos controlados
+    future=True,                 # estilo 2.0
     connect_args={
+        # TLS obligatorio para TiDB Serverless:
+        "ssl": {"ca": CA_PATH},
+        # (Opcional) timeouts de PyMySQL:
         "connect_timeout": 15,
         "read_timeout": 60,
         "write_timeout": 60,
@@ -58,4 +70,5 @@ def ensure_latest_schema() -> None:
             for statement in statements:
                 conn.execute(text(statement))
     except SQLAlchemyError as exc:
+        # Deja el warning pero ahora irá por TLS y no debería fallar por transporte inseguro
         print("[WARN] No se pudo aplicar la migración automática de registros:", exc)
