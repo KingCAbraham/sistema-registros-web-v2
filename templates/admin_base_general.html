@@ -1,17 +1,53 @@
 {% extends "layout.html" %}
 {% block content %}
   <div class="card stack">
-    <h2>Cargar base general (.xlsx)</h2>
+    <h2>Cargar base general (.csv)</h2>
+
     <form action="{{ url_for('admin.base_general') }}" method="post" enctype="multipart/form-data" class="stack max-480">
       <div class="field">
-        <label for="archivo">Archivo XLSX</label>
-        <input id="archivo" type="file" name="archivo" accept=".xlsx" required>
-        <p class="help">El archivo debe contener las columnas CLIENTE_UNICO, NOMBRE_CTE, GERENCIA, PRODUCTO, FIDIAPAGO y GESTION_DESC.</p>
+        <label for="archivo">Archivo CSV</label>
+        <input id="archivo" type="file" name="archivo" accept=".csv" required>
+        <p class="help">
+          Guarda desde Excel como <em>CSV (delimitado por comas)</em>. El archivo debe tener
+          **encabezados** y este **orden de columnas**:
+        </p>
+        <ol class="help" style="margin-top:-8px">
+          <li><code>cliente_unico</code></li>
+          <li><code>nombre_cte</code></li>
+          <li><code>gerencia</code></li>
+          <li><code>producto</code></li>
+          <li><code>fidiapago</code></li>
+          <li><code>gestion_desc</code></li>
+        </ol>
+        <p class="help">
+          Notas: se ignoran espacios al inicio/fin y se normaliza <code>cliente_unico</code> para evitar duplicados
+          por mayúsculas/minúsculas o espacios.
+        </p>
       </div>
+
+      <div class="field">
+        <label for="mode">Modo de carga</label>
+        <select id="mode" name="mode">
+          <option value="upsert" selected>Upsert (inserta y actualiza existentes)</option>
+          <option value="insert">Solo nuevos (no actualiza existentes)</option>
+        </select>
+      </div>
+
       <div class="actions">
         <button type="submit">Cargar</button>
         <a class="btn secondary" href="{{ url_for('admin.index') }}">Cancelar</a>
       </div>
     </form>
+
+    {# Mensajes de resultado #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="stack" style="margin-top:1rem">
+          {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message|safe }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
   </div>
 {% endblock %}

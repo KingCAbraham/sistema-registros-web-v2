@@ -13,6 +13,10 @@ CA_PATH = os.getenv("DB_SSL_CA", DEFAULT_CA)
 # ----- Engine (MySQL/TiDB) -----
 # Nota: TiDB Serverless requiere TLS. Por eso pasamos connect_args["ssl"].
 # Ajusta el pool si necesitas menos conexiones simultáneas.
+
+def _with_local_infile(url: str) -> str:
+    return url + ("&" if "?" in url else "?") + "local_infile=1"
+
 engine = create_engine(
     Config.SQLALCHEMY_DATABASE_URI,
     pool_pre_ping=True,          # verifica conexiones antes de usarlas
@@ -27,6 +31,7 @@ engine = create_engine(
         "connect_timeout": 15,
         "read_timeout": 60,
         "write_timeout": 60,
+        "local_infile": 1,
     },
 )
 

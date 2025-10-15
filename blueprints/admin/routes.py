@@ -1,6 +1,8 @@
 # blueprints/admin/routes.py
 import io
 import csv
+import os
+import time
 
 from flask import (
     render_template,
@@ -10,16 +12,18 @@ from flask import (
     flash,
     session as _session,
     send_file,
+    current_app,
 )
 from werkzeug.security import generate_password_hash
-from werkzeug.utils import secure_filename
 
-from db import SessionLocal
+from sqlalchemy import text
+
+from db import SessionLocal, engine
 from models import BaseGeneral, TipoConvenio, BocaCobranza, Usuario, Registro
-from services.base_general_loader import load_base_general_xlsx
 
 # Usa el blueprint ya creado en __init__.py
 from . import admin_bp
+
 
 def require_admin():
     if _session.get("role") != "admin":
@@ -27,8 +31,8 @@ def require_admin():
         return False
     return True
 
-# --- EXPORTAR REGISTROS POR SEMANA (CSV) ---
 
+# --- EXPORTAR REGISTROS POR SEMANA (CSV) ---
 @admin_bp.get("/export/semana")
 def export_semana():
     if _session.get("role") != "admin":
@@ -77,34 +81,51 @@ def export_semana():
     # CSV en memoria (BOM + UTF-8 para Excel)
     sio = io.StringIO(newline="")
     w = csv.writer(sio, lineterminator="\n")
-    w.writerow([
-        "ID", "CLIENTE_UNICO", "NOMBRE_SNAP", "GERENCIA_SNAP", "PRODUCTO_SNAP",
-        "FIDIAPAGO_SNAP", "GESTION_DESC_SNAP", "FECHA_PROMESA", "TELEFONO",
-        "SEMANA", "PAGO_INICIAL", "PAGO_SEMANAL", "DURACION_SEMANAS", "NOTAS",
-        "CREADO_POR", "CREADO_EN",
-        "TIPO_CONVENIO", "BOCA_COBRANZA",
-    ])
+    w.writerow(
+        [
+            "ID",
+            "CLIENTE_UNICO",
+            "NOMBRE_SNAP",
+            "GERENCIA_SNAP",
+            "PRODUCTO_SNAP",
+            "FIDIAPAGO_SNAP",
+            "GESTION_DESC_SNAP",
+            "FECHA_PROMESA",
+            "TELEFONO",
+            "SEMANA",
+            "PAGO_INICIAL",
+            "PAGO_SEMANAL",
+            "DURACION_SEMANAS",
+            "NOTAS",
+            "CREADO_POR",
+            "CREADO_EN",
+            "TIPO_CONVENIO",
+            "BOCA_COBRANZA",
+        ]
+    )
     for r in rows:
-        w.writerow([
-            r.id or "",
-            r.cliente_unico or "",
-            r.nombre_cte_snap or "",
-            r.gerencia_snap or "",
-            r.producto_snap or "",
-            r.fidiapago_snap or "",
-            (r.gestion_desc_snap or "").replace("\r", " ").replace("\n", " "),
-            r.fecha_promesa or "",
-            r.telefono or "",
-            r.semana or "",
-            r.pago_inicial or "",
-            r.pago_semanal or "",
-            r.duracion_semanas or "",
-            (r.notas or "").replace("\r", " ").replace("\n", " "),
-            r.creado_por_username or "",
-            r.creado_en or "",
-            r.tipo_convenio_nombre or "",
-            r.boca_cobranza_nombre or "",
-        ])
+        w.writerow(
+            [
+                r.id or "",
+                r.cliente_unico or "",
+                r.nombre_cte_snap or "",
+                r.gerencia_snap or "",
+                r.producto_snap or "",
+                r.fidiapago_snap or "",
+                (r.gestion_desc_snap or "").replace("\r", " ").replace("\n", " "),
+                r.fecha_promesa or "",
+                r.telefono or "",
+                r.semana or "",
+                r.pago_inicial or "",
+                r.pago_semanal or "",
+                r.duracion_semanas or "",
+                (r.notas or "").replace("\r", " ").replace("\n", " "),
+                r.creado_por_username or "",
+                r.creado_en or "",
+                r.tipo_convenio_nombre or "",
+                r.boca_cobranza_nombre or "",
+            ]
+        )
 
     csv_bytes = ("\ufeff" + sio.getvalue()).encode("utf-8")
     filename = f"registros_semana_{semana}.csv"
@@ -112,8 +133,9 @@ def export_semana():
         io.BytesIO(csv_bytes),
         mimetype="text/csv",
         as_attachment=True,
-        download_name=filename,   # si usas Flask <2.0, cambia a attachment_filename=filename
+        download_name=filename,
     )
+
 
 # (opcional) una portada del admin para el link "Admin"
 @admin_bp.get("/")
@@ -122,6 +144,7 @@ def index():
         return redirect(url_for("auth.login"))
     return render_template("admin_index.html")  # crea un template simple si quieres
 
+
 # --------- Base General ----------
 @admin_bp.get("/base_general")
 def base_general():
@@ -129,28 +152,184 @@ def base_general():
         return redirect(url_for("auth.login"))
     return render_template("admin_base_general.html")
 
+
+# --------- Carga CSV → staging → UPSERT a destino ----------
 @admin_bp.post("/base_general")
 def base_general_upload():
+    """
+    Carga SOLO CSV. Inserta nuevos y actualiza existentes por UNIQUE(cliente_unico).
+    Requisitos previos en la BD (una sola vez):
+      - base_general: SOLO un índice UNIQUE(cliente_unico)
+      - base_general_tmp: SIN índices UNIQUE
+    """
     if not require_admin():
         return redirect(url_for("auth.login"))
 
-    file = request.files.get("archivo")
-    if not file or file.filename == "":
-        flash("Selecciona un archivo .xlsx", "warning")
+    f = request.files.get("archivo")
+    mode = (request.form.get("mode") or "upsert").lower()  # "upsert" | "insert"
+
+    if not f or f.filename == "":
+        flash("Selecciona un archivo .csv", "warning")
         return redirect(url_for("admin.base_general"))
 
-    filename = secure_filename(file.filename)
+    if not f.filename.lower().endswith(".csv"):
+        flash("Solo se admite CSV (más rápido que XLSX).", "warning")
+        return redirect(url_for("admin.base_general"))
+
+    # Guarda temporalmente para usar LOAD DATA LOCAL INFILE
+    t0 = time.time()
+    tmp_dir = os.path.join(current_app.instance_path, "uploads")
+    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_path = os.path.join(tmp_dir, f"bg_{int(t0)}.csv")
+    f.save(tmp_path)
+
     try:
-        data = file.read()
-        stats = load_base_general_xlsx(io.BytesIO(data))
+        with engine.begin() as conn:
+            # 1) Limpia staging
+            conn.execute(text("TRUNCATE TABLE sistema_registros.base_general_tmp"))
+
+            # 2) Carga ultra-rápida a staging
+            #    Si tu CSV usa solo '\n', cambia LINES TERMINATED BY '\n'
+            conn.exec_driver_sql(
+                """
+                LOAD DATA LOCAL INFILE %s
+                INTO TABLE sistema_registros.base_general_tmp
+                CHARACTER SET utf8mb4
+                FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
+                LINES  TERMINATED BY '\r\n'
+                IGNORE 1 LINES
+                (@cliente_unico,@nombre_cte,@gerencia,@producto,@fidiapago,@gestion_desc)
+                SET
+                  cliente_unico = TRIM(@cliente_unico),
+                  nombre_cte    = NULLIF(TRIM(@nombre_cte),''),
+                  gerencia      = NULLIF(TRIM(@gerencia),''),
+                  producto      = NULLIF(TRIM(@producto),''),
+                  fidiapago     = NULLIF(TRIM(@fidiapago),''),
+                  gestion_desc  = NULLIF(TRIM(@gestion_desc),''),
+                  actualizado_en = NOW();
+                """,
+                (tmp_path,),
+            )
+
+            total_tmp = conn.execute(
+                text("SELECT COUNT(*) FROM sistema_registros.base_general_tmp")
+            ).scalar_one()
+
+            # 3) Conteos sobre vista deduplicada (CTE con window function)
+            #    Deduplicamos por UPPER(TRIM(cliente_unico)) quedándonos con la última fila (id DESC)
+            nuevos = conn.execute(
+                text(
+                    """
+                WITH dedup AS (
+                  SELECT s.*,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY UPPER(TRIM(cliente_unico))
+                           ORDER BY id DESC
+                         ) rn
+                  FROM sistema_registros.base_general_tmp s
+                )
+                SELECT COUNT(*)
+                FROM dedup d
+                LEFT JOIN sistema_registros.base_general t
+                  ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(d.cliente_unico))
+                WHERE d.rn = 1
+                  AND t.cliente_unico IS NULL
+                """
+                )
+            ).scalar_one()
+
+            dedup = conn.execute(
+                text(
+                    """
+                WITH dedup AS (
+                  SELECT s.*,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY UPPER(TRIM(cliente_unico))
+                           ORDER BY id DESC
+                         ) rn
+                  FROM sistema_registros.base_general_tmp s
+                )
+                SELECT COUNT(*) FROM dedup WHERE rn = 1
+                """
+                )
+            ).scalar_one()
+
+            # 4) UPSERT (o solo nuevos) normalizando cliente_unico al entrar
+            if mode == "insert":
+                conn.execute(
+                    text(
+                        """
+                    WITH dedup AS (
+                      SELECT s.*,
+                             ROW_NUMBER() OVER (
+                               PARTITION BY UPPER(TRIM(cliente_unico))
+                               ORDER BY id DESC
+                             ) rn
+                      FROM sistema_registros.base_general_tmp s
+                    )
+                    INSERT INTO sistema_registros.base_general
+                      (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
+                    SELECT UPPER(TRIM(d.cliente_unico)) AS cliente_unico,
+                           d.nombre_cte, d.gerencia, d.producto, d.fidiapago, d.gestion_desc
+                    FROM dedup d
+                    LEFT JOIN sistema_registros.base_general t
+                      ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(d.cliente_unico))
+                    WHERE d.rn = 1
+                      AND t.cliente_unico IS NULL
+                    """
+                    )
+                )
+                insertados = int(nuevos)
+                actualizados = 0
+            else:  # upsert
+                res = conn.execute(
+                    text(
+                        """
+                    WITH dedup AS (
+                      SELECT s.*,
+                             ROW_NUMBER() OVER (
+                               PARTITION BY UPPER(TRIM(cliente_unico))
+                               ORDER BY id DESC
+                             ) rn
+                      FROM sistema_registros.base_general_tmp s
+                    )
+                    INSERT INTO sistema_registros.base_general
+                      (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
+                    SELECT UPPER(TRIM(d.cliente_unico)) AS cliente_unico,
+                           d.nombre_cte, d.gerencia, d.producto, d.fidiapago, d.gestion_desc
+                    FROM dedup d
+                    WHERE d.rn = 1
+                    ON DUPLICATE KEY UPDATE
+                      nombre_cte = VALUES(nombre_cte),
+                      gerencia   = VALUES(gerencia),
+                      producto   = VALUES(producto),
+                      fidiapago  = VALUES(fidiapago),
+                      gestion_desc = VALUES(gestion_desc),
+                      actualizado_en = NOW()
+                    """
+                    )
+                )
+                # Aproximación de contadores: nuevos conocidos; "actualizados" = dedup - nuevos
+                insertados = int(nuevos)
+                actualizados = max(0, int(dedup) - insertados)
+
+        dt = time.time() - t0
         flash(
-            f"Base cargada. Insertados: {stats['inserted']} | Actualizados: {stats['updated']} | Omitidos: {stats['skipped']}",
+            f"CSV cargado: {total_tmp} filas (dedup: {dedup}). "
+            f"Nuevos insertados: {insertados} | Actualizados: {actualizados}. "
+            f"Tiempo: {dt:.1f}s",
             "success",
         )
     except Exception as e:
-        flash(f"Error al procesar: {e}", "danger")
+        flash(f"Error al procesar CSV: {e}", "danger")
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
 
     return redirect(url_for("admin.base_general"))
+
 
 # ---------- Catálogo: TipoConvenio ----------
 @admin_bp.get("/catalogo/tipos")
@@ -160,6 +339,7 @@ def catalogo_tipos():
     with SessionLocal() as db:
         tipos = db.query(TipoConvenio).order_by(TipoConvenio.nombre.asc()).all()
     return render_template("admin_catalogo_tipos.html", tipos=tipos)
+
 
 @admin_bp.post("/catalogo/tipos")
 def catalogo_tipos_save():
@@ -181,6 +361,7 @@ def catalogo_tipos_save():
     flash("Guardado", "success")
     return redirect(url_for("admin.catalogo_tipos"))
 
+
 # ---------- Catálogo: BocaCobranza ----------
 @admin_bp.get("/catalogo/bocas")
 def catalogo_bocas():
@@ -189,6 +370,7 @@ def catalogo_bocas():
     with SessionLocal() as db:
         bocas = db.query(BocaCobranza).order_by(BocaCobranza.nombre.asc()).all()
     return render_template("admin_catalogo_bocas.html", bocas=bocas)
+
 
 @admin_bp.post("/catalogo/bocas")
 def catalogo_bocas_save():
@@ -210,6 +392,7 @@ def catalogo_bocas_save():
     flash("Guardado", "success")
     return redirect(url_for("admin.catalogo_bocas"))
 
+
 # ---------- Usuarios ----------
 @admin_bp.get("/usuarios")
 def usuarios_list():
@@ -218,6 +401,7 @@ def usuarios_list():
     with SessionLocal() as db:
         users = db.query(Usuario).order_by(Usuario.username.asc()).all()
     return render_template("admin_usuarios.html", usuarios=users)
+
 
 @admin_bp.post("/usuarios")
 def usuarios_create():
