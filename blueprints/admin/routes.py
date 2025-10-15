@@ -153,7 +153,7 @@ def base_general():
     return render_template("admin_base_general.html")
 
 
-# --------- Carga CSV → staging → UPSERT a destino ----------
+# --------- Carga CSV → staging → UPSERT a destino (sin CTE, compatible TiDB) ----------
 @admin_bp.post("/base_general")
 def base_general_upload():
     """
@@ -215,90 +215,66 @@ def base_general_upload():
                 text("SELECT COUNT(*) FROM sistema_registros.base_general_tmp")
             ).scalar_one()
 
-            # 3) Conteos sobre vista deduplicada (CTE con window function)
-            #    Deduplicamos por UPPER(TRIM(cliente_unico)) quedándonos con la última fila (id DESC)
+            # 3) Deduplicar SIN CTE:
+            #    Elegimos la fila más reciente por cada UPPER(TRIM(cliente_unico))
+            conn.execute(text("DROP TEMPORARY TABLE IF EXISTS tmp_dedup"))
+            conn.execute(
+                text(
+                    """
+                CREATE TEMPORARY TABLE tmp_dedup AS
+                SELECT s.*
+                FROM sistema_registros.base_general_tmp s
+                JOIN (
+                  SELECT UPPER(TRIM(cliente_unico)) AS cu_norm, MAX(id) AS max_id
+                  FROM sistema_registros.base_general_tmp
+                  GROUP BY UPPER(TRIM(cliente_unico))
+                ) d ON d.max_id = s.id
+                """
+                )
+            )
+
+            dedup = conn.execute(text("SELECT COUNT(*) FROM tmp_dedup")).scalar_one()
+
+            # 4) Conteo de NUEVOS (para el resumen)
             nuevos = conn.execute(
                 text(
                     """
-                WITH dedup AS (
-                  SELECT s.*,
-                         ROW_NUMBER() OVER (
-                           PARTITION BY UPPER(TRIM(cliente_unico))
-                           ORDER BY id DESC
-                         ) rn
-                  FROM sistema_registros.base_general_tmp s
-                )
                 SELECT COUNT(*)
-                FROM dedup d
+                FROM tmp_dedup s
                 LEFT JOIN sistema_registros.base_general t
-                  ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(d.cliente_unico))
-                WHERE d.rn = 1
-                  AND t.cliente_unico IS NULL
+                  ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(s.cliente_unico))
+                WHERE t.cliente_unico IS NULL
                 """
                 )
             ).scalar_one()
 
-            dedup = conn.execute(
-                text(
-                    """
-                WITH dedup AS (
-                  SELECT s.*,
-                         ROW_NUMBER() OVER (
-                           PARTITION BY UPPER(TRIM(cliente_unico))
-                           ORDER BY id DESC
-                         ) rn
-                  FROM sistema_registros.base_general_tmp s
-                )
-                SELECT COUNT(*) FROM dedup WHERE rn = 1
-                """
-                )
-            ).scalar_one()
-
-            # 4) UPSERT (o solo nuevos) normalizando cliente_unico al entrar
+            # 5) Inserta/Actualiza destino (normalizando cliente_unico al entrar)
             if mode == "insert":
-                conn.execute(
+                res = conn.execute(
                     text(
                         """
-                    WITH dedup AS (
-                      SELECT s.*,
-                             ROW_NUMBER() OVER (
-                               PARTITION BY UPPER(TRIM(cliente_unico))
-                               ORDER BY id DESC
-                             ) rn
-                      FROM sistema_registros.base_general_tmp s
-                    )
                     INSERT INTO sistema_registros.base_general
                       (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
-                    SELECT UPPER(TRIM(d.cliente_unico)) AS cliente_unico,
-                           d.nombre_cte, d.gerencia, d.producto, d.fidiapago, d.gestion_desc
-                    FROM dedup d
+                    SELECT UPPER(TRIM(s.cliente_unico)) AS cliente_unico,
+                           s.nombre_cte, s.gerencia, s.producto, s.fidiapago, s.gestion_desc
+                    FROM tmp_dedup s
                     LEFT JOIN sistema_registros.base_general t
-                      ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(d.cliente_unico))
-                    WHERE d.rn = 1
-                      AND t.cliente_unico IS NULL
+                      ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(s.cliente_unico))
+                    WHERE t.cliente_unico IS NULL
                     """
                     )
                 )
-                insertados = int(nuevos)
+                insertados = res.rowcount or int(nuevos)
                 actualizados = 0
             else:  # upsert
                 res = conn.execute(
                     text(
                         """
-                    WITH dedup AS (
-                      SELECT s.*,
-                             ROW_NUMBER() OVER (
-                               PARTITION BY UPPER(TRIM(cliente_unico))
-                               ORDER BY id DESC
-                             ) rn
-                      FROM sistema_registros.base_general_tmp s
-                    )
                     INSERT INTO sistema_registros.base_general
                       (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
-                    SELECT UPPER(TRIM(d.cliente_unico)) AS cliente_unico,
-                           d.nombre_cte, d.gerencia, d.producto, d.fidiapago, d.gestion_desc
-                    FROM dedup d
-                    WHERE d.rn = 1
+                    SELECT UPPER(TRIM(s.cliente_unico)) AS cliente_unico,
+                           s.nombre_cte, s.gerencia, s.producto, s.fidiapago, s.gestion_desc
+                    FROM tmp_dedup s
                     ON DUPLICATE KEY UPDATE
                       nombre_cte = VALUES(nombre_cte),
                       gerencia   = VALUES(gerencia),
@@ -309,13 +285,13 @@ def base_general_upload():
                     """
                     )
                 )
-                # Aproximación de contadores: nuevos conocidos; "actualizados" = dedup - nuevos
+                # Estimación robusta: actualizados = dedup - nuevos (los que ya existían)
                 insertados = int(nuevos)
                 actualizados = max(0, int(dedup) - insertados)
 
         dt = time.time() - t0
         flash(
-            f"CSV cargado: {total_tmp} filas (dedup: {dedup}). "
+            f"CSV cargado: {total_tmp} filas (dedup únicas: {dedup}). "
             f"Nuevos insertados: {insertados} | Actualizados: {actualizados}. "
             f"Tiempo: {dt:.1f}s",
             "success",
@@ -387,8 +363,8 @@ def catalogo_bocas_save():
         if item:
             item.activo = activo
         else:
-            db.add(BocaCobranza(nombre=nombre, activo=activo))
-        db.commit()
+            db.add(BocaCobranza(nombre=nombre),)
+            db.commit()
     flash("Guardado", "success")
     return redirect(url_for("admin.catalogo_bocas"))
 
