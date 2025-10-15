@@ -137,12 +137,12 @@ def export_semana():
     )
 
 
-# (opcional) una portada del admin para el link "Admin"
+# (opcional) portada del admin
 @admin_bp.get("/")
 def index():
     if not require_admin():
         return redirect(url_for("auth.login"))
-    return render_template("admin_index.html")  # crea un template simple si quieres
+    return render_template("admin_index.html")
 
 
 # --------- Base General ----------
@@ -153,12 +153,12 @@ def base_general():
     return render_template("admin_base_general.html")
 
 
-# --------- Carga CSV → staging → UPSERT a destino (sin CTE, compatible TiDB) ----------
+# --------- Carga CSV → staging → UPSERT a destino (sin CTE ni CTAS, compatible TiDB) ----------
 @admin_bp.post("/base_general")
 def base_general_upload():
     """
     Carga SOLO CSV. Inserta nuevos y actualiza existentes por UNIQUE(cliente_unico).
-    Requisitos previos en la BD (una sola vez):
+    Requisitos previos (una sola vez en la BD):
       - base_general: SOLO un índice UNIQUE(cliente_unico)
       - base_general_tmp: SIN índices UNIQUE
     """
@@ -171,7 +171,6 @@ def base_general_upload():
     if not f or f.filename == "":
         flash("Selecciona un archivo .csv", "warning")
         return redirect(url_for("admin.base_general"))
-
     if not f.filename.lower().endswith(".csv"):
         flash("Solo se admite CSV (más rápido que XLSX).", "warning")
         return redirect(url_for("admin.base_general"))
@@ -188,7 +187,7 @@ def base_general_upload():
             # 1) Limpia staging
             conn.execute(text("TRUNCATE TABLE sistema_registros.base_general_tmp"))
 
-            # 2) Carga ultra-rápida a staging
+            # 2) Carga rápida a staging
             #    Si tu CSV usa solo '\n', cambia LINES TERMINATED BY '\n'
             conn.exec_driver_sql(
                 """
@@ -215,77 +214,69 @@ def base_general_upload():
                 text("SELECT COUNT(*) FROM sistema_registros.base_general_tmp")
             ).scalar_one()
 
-            # 3) Deduplicar SIN CTE:
-            #    Elegimos la fila más reciente por cada UPPER(TRIM(cliente_unico))
-            conn.execute(text("DROP TEMPORARY TABLE IF EXISTS tmp_dedup"))
-            conn.execute(
-                text(
-                    """
-                CREATE TEMPORARY TABLE tmp_dedup AS
-                SELECT s.*
+            # 3) Subconsulta "dedup": última fila por UPPER(TRIM(cliente_unico))
+            dedup_subq = """
+              SELECT *
+              FROM (
+                SELECT s.*,
+                       ROW_NUMBER() OVER (
+                         PARTITION BY UPPER(TRIM(cliente_unico))
+                         ORDER BY id DESC
+                       ) AS rn
                 FROM sistema_registros.base_general_tmp s
-                JOIN (
-                  SELECT UPPER(TRIM(cliente_unico)) AS cu_norm, MAX(id) AS max_id
-                  FROM sistema_registros.base_general_tmp
-                  GROUP BY UPPER(TRIM(cliente_unico))
-                ) d ON d.max_id = s.id
-                """
-                )
-            )
+              ) d
+              WHERE d.rn = 1
+            """
 
-            dedup = conn.execute(text("SELECT COUNT(*) FROM tmp_dedup")).scalar_one()
-
-            # 4) Conteo de NUEVOS (para el resumen)
-            nuevos = conn.execute(
-                text(
-                    """
-                SELECT COUNT(*)
-                FROM tmp_dedup s
-                LEFT JOIN sistema_registros.base_general t
-                  ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(s.cliente_unico))
-                WHERE t.cliente_unico IS NULL
-                """
-                )
+            # Conteo deduplicado
+            dedup = conn.execute(
+                text(f"SELECT COUNT(*) FROM ({dedup_subq}) AS dd")
             ).scalar_one()
 
-            # 5) Inserta/Actualiza destino (normalizando cliente_unico al entrar)
+            # Conteo de NUEVOS (dedup LEFT JOIN destino)
+            nuevos = conn.execute(
+                text(f"""
+                  SELECT COUNT(*)
+                  FROM ({dedup_subq}) AS d
+                  LEFT JOIN sistema_registros.base_general t
+                    ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(d.cliente_unico))
+                  WHERE t.cliente_unico IS NULL
+                """)
+            ).scalar_one()
+
+            # 4) Inserta/Actualiza destino (normalizando cliente_unico al entrar)
             if mode == "insert":
                 res = conn.execute(
-                    text(
-                        """
-                    INSERT INTO sistema_registros.base_general
-                      (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
-                    SELECT UPPER(TRIM(s.cliente_unico)) AS cliente_unico,
-                           s.nombre_cte, s.gerencia, s.producto, s.fidiapago, s.gestion_desc
-                    FROM tmp_dedup s
-                    LEFT JOIN sistema_registros.base_general t
-                      ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(s.cliente_unico))
-                    WHERE t.cliente_unico IS NULL
-                    """
-                    )
+                    text(f"""
+                      INSERT INTO sistema_registros.base_general
+                        (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
+                      SELECT UPPER(TRIM(d.cliente_unico)) AS cliente_unico,
+                             d.nombre_cte, d.gerencia, d.producto, d.fidiapago, d.gestion_desc
+                      FROM ({dedup_subq}) AS d
+                      LEFT JOIN sistema_registros.base_general t
+                        ON UPPER(TRIM(t.cliente_unico)) = UPPER(TRIM(d.cliente_unico))
+                      WHERE t.cliente_unico IS NULL
+                    """)
                 )
                 insertados = res.rowcount or int(nuevos)
                 actualizados = 0
             else:  # upsert
                 res = conn.execute(
-                    text(
-                        """
-                    INSERT INTO sistema_registros.base_general
-                      (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
-                    SELECT UPPER(TRIM(s.cliente_unico)) AS cliente_unico,
-                           s.nombre_cte, s.gerencia, s.producto, s.fidiapago, s.gestion_desc
-                    FROM tmp_dedup s
-                    ON DUPLICATE KEY UPDATE
-                      nombre_cte = VALUES(nombre_cte),
-                      gerencia   = VALUES(gerencia),
-                      producto   = VALUES(producto),
-                      fidiapago  = VALUES(fidiapago),
-                      gestion_desc = VALUES(gestion_desc),
-                      actualizado_en = NOW()
-                    """
-                    )
+                    text(f"""
+                      INSERT INTO sistema_registros.base_general
+                        (cliente_unico, nombre_cte, gerencia, producto, fidiapago, gestion_desc)
+                      SELECT UPPER(TRIM(d.cliente_unico)) AS cliente_unico,
+                             d.nombre_cte, d.gerencia, d.producto, d.fidiapago, d.gestion_desc
+                      FROM ({dedup_subq}) AS d
+                      ON DUPLICATE KEY UPDATE
+                        nombre_cte = VALUES(nombre_cte),
+                        gerencia   = VALUES(gerencia),
+                        producto   = VALUES(producto),
+                        fidiapago  = VALUES(fidiapago),
+                        gestion_desc = VALUES(gestion_desc),
+                        actualizado_en = NOW()
+                    """)
                 )
-                # Estimación robusta: actualizados = dedup - nuevos (los que ya existían)
                 insertados = int(nuevos)
                 actualizados = max(0, int(dedup) - insertados)
 
@@ -363,8 +354,8 @@ def catalogo_bocas_save():
         if item:
             item.activo = activo
         else:
-            db.add(BocaCobranza(nombre=nombre),)
-            db.commit()
+            db.add(BocaCobranza(nombre=nombre))
+        db.commit()
     flash("Guardado", "success")
     return redirect(url_for("admin.catalogo_bocas"))
 
